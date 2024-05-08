@@ -1,0 +1,67 @@
+use config::Config;
+use serde::{Deserialize, Serialize};
+use snafu::ResultExt;
+
+use crate::error::{ConfigParseFailedSnafu, Error, WriteConfigFailedSnafu};
+
+static CONFIG_PATH: &str = "config.toml";
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Setting {
+    pub server: Server,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Server {
+    pub client_id: String,
+    pub client_secret: String,
+    pub refresh_token: Option<String>,
+}
+
+impl Setting {
+    pub fn load() -> Result<Self, Error> {
+        let settings = Config::builder()
+            // Add in `./Settings.toml`
+            .add_source(config::File::with_name(CONFIG_PATH))
+            // Add in settings from the environment (with a prefix of APP)
+            // Eg.. `APP_DEBUG=1 ./target/app` would set the `debug` key
+            .add_source(config::Environment::with_prefix("APP"))
+            .build()
+            .context(ConfigParseFailedSnafu)?;
+
+        Ok(settings.try_deserialize().context(ConfigParseFailedSnafu)?)
+    }
+
+    pub async fn save(&self) -> Result<(), Error> {
+        let toml = toml::to_string(self).unwrap();
+
+        tokio::fs::write(CONFIG_PATH, toml)
+            .await
+            .context(WriteConfigFailedSnafu)?;
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_setting() {
+        let setting = Setting {
+            server: Server {
+                client_id: "client_id".to_string(),
+                client_secret: "client_secret".to_string(),
+                refresh_token: None,
+            },
+        };
+
+        setting.save().await.unwrap();
+
+        let loaded_setting = Setting::load().unwrap();
+        assert_eq!(setting.server.client_id, loaded_setting.server.client_id);
+
+        std::fs::remove_file(CONFIG_PATH).unwrap();
+    }
+}
