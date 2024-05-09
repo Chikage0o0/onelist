@@ -5,11 +5,14 @@ edition = "2021"
 
 [dependencies]
 arc-swap = "1.7.1"
-axum = "0.7.5"
+axum = { version = "0.7.5" }
 chrono = "0.4.38"
 config = "0.14.0"
+
+futures-util = "0.3.30"
 mini-moka = "0.10.3"
 onedrive-api = "0.10.0"
+reqwest = { version = "0.12.4", features = ["json", "stream"] }
 serde = { version = "1.0.201", features = ["derive"] }
 serde_json = "1.0.117"
 snafu = "0.8.2"
