@@ -6,12 +6,13 @@ use crate::error::{ConfigParseFailedSnafu, Error, WriteConfigFailedSnafu};
 
 static CONFIG_PATH: &str = "config.toml";
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Setting {
     pub server: Server,
+    pub home_dir: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Server {
     pub client_id: String,
     pub client_secret: String,
@@ -63,6 +64,7 @@ mod tests {
                 client_secret: "client_secret".to_string(),
                 refresh_token: None,
             },
+            home_dir: "home_dir".to_string(),
         };
 
         setting.save().await.unwrap();

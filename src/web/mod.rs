@@ -1,9 +1,19 @@
+use std::{sync::Arc, time::Duration};
+
 use axum::Router;
+use mini_moka::sync::Cache;
 use tokio::signal;
 use tracing::info;
 
-pub async fn web_server() {
-    let app = router();
+use crate::utils::config::Setting;
+
+use self::list::FileInfo;
+
+mod download;
+mod list;
+
+pub async fn web_server(config: Setting) {
+    let app = router(config);
 
     info!("Starting the web server");
 
@@ -17,8 +27,36 @@ pub async fn web_server() {
     info!("Web server stopped");
 }
 
-fn router() -> Router {
-    Router::new()
+#[derive(Debug)]
+struct AppState {
+    home_dir: String,
+    download_cache: Cache<String, String>,
+    list_cache: Cache<String, Arc<Vec<FileInfo>>>,
+}
+
+fn router(config: Setting) -> Router {
+    let home_dir = if config.home_dir.starts_with('/') {
+        config.home_dir
+    } else {
+        format!("/{}", config.home_dir)
+    };
+
+    let download_cache = Cache::builder()
+        .time_to_live(Duration::from_secs(60 * 10))
+        .build();
+    let list_cache = Cache::builder()
+        .time_to_live(Duration::from_secs(60 * 30))
+        .build();
+
+    let state = Arc::new(AppState {
+        home_dir,
+        download_cache,
+        list_cache,
+    });
+    let router = Router::new()
+        .merge(list::router(state.clone()))
+        .merge(download::router(state.clone()));
+    Router::new().nest("/api", router)
 }
 
 async fn shutdown_signal() {

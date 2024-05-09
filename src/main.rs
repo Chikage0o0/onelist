@@ -34,7 +34,7 @@ async fn main() {
 
     worker::worker();
 
-    web_server().await;
+    web_server(config.clone()).await;
 
     info!("Saving the configuration");
     match config.save().await {
