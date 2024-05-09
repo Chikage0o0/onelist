@@ -16,7 +16,7 @@ use std::{
 
 use onedrive_api::{Auth, ClientCredential, TokenResponse};
 use snafu::{ResultExt, Snafu};
-use tracing::info;
+use tracing::{debug, info};
 use url::Url;
 
 #[derive(Debug)]
@@ -24,6 +24,7 @@ pub struct Onedrive {
     pub auth: onedrive_api::Auth,
     pub client_secret: String,
     pub token: Token,
+    pub drive: onedrive_api::OneDrive,
 }
 #[derive(Debug, Clone)]
 pub struct Token {
@@ -55,10 +56,14 @@ impl Onedrive {
             panic!("Failed to login or refresh: {:?}", e);
         });
 
+        let drive =
+            onedrive_api::OneDrive::new(&token.access_token, onedrive_api::DriveLocation::me());
+
         Self {
             auth,
             client_secret: client_secret.to_string(),
             token,
+            drive,
         }
     }
 
@@ -109,16 +114,22 @@ impl Onedrive {
         }
     }
 
-    pub async fn refresh(self) -> Result<Self, Error> {
+    #[allow(dead_code)]
+    pub async fn refresh(&self) -> Result<Self, Error> {
+        debug!("Refreshing the token");
         let new_token = Self::login_with_refresh_token(
             &self.auth,
             &self.client_secret,
             &self.token.refresh_token.as_ref().unwrap(),
         )
         .await?;
+        let new_drive =
+            onedrive_api::OneDrive::new(&new_token.access_token, onedrive_api::DriveLocation::me());
         Ok(Self {
             token: new_token,
-            ..self
+            drive: new_drive,
+            auth: self.auth.clone(),
+            client_secret: self.client_secret.clone(),
         })
     }
 }

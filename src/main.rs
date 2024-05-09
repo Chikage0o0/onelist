@@ -1,15 +1,19 @@
-use std::sync::{Mutex, OnceLock};
+use std::sync::OnceLock;
 
+use arc_swap::ArcSwap;
 use onedrive::Onedrive;
-use onedrive_api::ItemLocation;
-use tracing::info;
 
-mod cache;
+use tracing::{info, warn};
+
+use crate::web::web_server;
+
 mod error;
 mod onedrive;
 mod utils;
+mod web;
+mod worker;
 
-static DRIVE: OnceLock<Mutex<Option<Onedrive>>> = OnceLock::new();
+static DRIVE: OnceLock<ArcSwap<Onedrive>> = OnceLock::new();
 
 #[tokio::main]
 async fn main() {
@@ -17,7 +21,7 @@ async fn main() {
     info!("Starting the program");
 
     info!("Loading the configuration");
-    let config = utils::config::Setting::load().unwrap();
+    let mut config = utils::config::Setting::load().unwrap();
     info!("Configuration loaded: {:?}", config);
 
     let onedrive = Onedrive::new(
@@ -26,15 +30,15 @@ async fn main() {
         &config.server.refresh_token,
     )
     .await;
-    DRIVE.set(Mutex::new(Some(onedrive))).unwrap();
+    DRIVE.set(ArcSwap::from_pointee(onedrive)).unwrap();
 
-    let drive = onedrive::get_drive().await;
-    println!("{:?}", drive.get_drive().await.unwrap());
+    worker::worker();
 
-    let item = drive.get_item(ItemLocation::root()).await.unwrap();
-    println!("{:?}", item);
+    web_server().await;
 
     info!("Saving the configuration");
-    config.save().await.unwrap();
-    info!("Configuration saved");
+    match config.save().await {
+        Ok(_) => info!("Configuration saved"),
+        Err(e) => warn!("Failed to save the configuration: {:?}", e),
+    }
 }

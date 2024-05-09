@@ -32,7 +32,15 @@ impl Setting {
         Ok(settings.try_deserialize().context(ConfigParseFailedSnafu)?)
     }
 
-    pub async fn save(&self) -> Result<(), Error> {
+    pub async fn save(&mut self) -> Result<(), Error> {
+        // update the refresh token
+        if let Some(drive) = crate::DRIVE.get() {
+            let refresh_token = drive.load().token.refresh_token.clone();
+            if let Some(refresh_token) = refresh_token {
+                self.server.refresh_token = Some(refresh_token);
+            }
+        }
+
         let toml = toml::to_string(self).unwrap();
 
         tokio::fs::write(CONFIG_PATH, toml)
@@ -49,7 +57,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_setting() {
-        let setting = Setting {
+        let mut setting = Setting {
             server: Server {
                 client_id: "client_id".to_string(),
                 client_secret: "client_secret".to_string(),
