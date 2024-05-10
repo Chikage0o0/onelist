@@ -3,6 +3,7 @@ use std::sync::Arc;
 use axum::{
     body::Body,
     extract::{Path, State},
+    http::HeaderMap,
     response::{IntoResponse, Redirect, Response},
     routing::get,
     Json,
@@ -51,6 +52,7 @@ async fn download_file(
 
 async fn proxy_download_file(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     let drive = match DRIVE.get() {
@@ -78,7 +80,25 @@ async fn proxy_download_file(
         }
     };
 
-    let req = reqwest::get(&url).await.context(ProxyDownloadSnafu);
+    let req = reqwest::Client::new()
+        .get(&url)
+        .header(
+            header::ACCEPT,
+            headers
+                .get(header::ACCEPT)
+                .map(|v| v.to_str().unwrap())
+                .unwrap_or("*/*"),
+        )
+        .header(
+            header::CONTENT_RANGE,
+            headers
+                .get(header::CONTENT_RANGE)
+                .map(|v| v.to_str().unwrap())
+                .unwrap_or(""),
+        )
+        .send()
+        .await
+        .context(ProxyDownloadSnafu);
     let (headers, body) = match req {
         Ok(resp) => {
             let headers = resp.headers().clone();

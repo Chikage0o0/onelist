@@ -6,6 +6,7 @@ use axum::{
     routing::get,
     Json,
 };
+use mini_moka::sync::Cache;
 use onedrive_api::{resource::DriveItem, ItemLocation};
 use serde::Serialize;
 use serde_json::json;
@@ -22,107 +23,83 @@ pub struct FileInfo {
     size: i64,
     last_modified_date_time: i64,
     created_date_time: i64,
-    download_url: String,
+    #[serde(rename = "type")]
+    file_type: FileTypes,
+}
+#[derive(Debug, Serialize)]
+enum FileTypes {
+    File,
+    Folder,
 }
 
 async fn list(State(state): State<Arc<AppState>>, Path(p): Path<String>) -> impl IntoResponse {
     let home_dir = &state.home_dir;
-
-    let drive = match DRIVE.get() {
-        Some(drive) => drive,
-        None => return ListError::StillStarting.into_response(),
-    };
-
     let p = format!("/{}", p);
 
     let dir = format!("{}{}", home_dir, p);
-    let cache = &state.list_cache;
-    if let Some(cached) = cache.get(&dir) {
-        return (
-            axum::http::StatusCode::OK,
-            Json(json!({ "files": *cached })),
-        )
-            .into_response();
+
+    let children = match list_inner(state, dir).await {
+        Ok(children) => children,
+        Err(e) => return e.into_response(),
+    };
+
+    (
+        axum::http::StatusCode::OK,
+        Json(json!({ "files": *children })),
+    )
+        .into_response()
+}
+
+async fn list_home(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let home_dir = state.home_dir.clone();
+
+    let children = match list_inner(state, home_dir).await {
+        Ok(children) => children,
+        Err(e) => return e.into_response(),
+    };
+
+    (
+        axum::http::StatusCode::OK,
+        Json(json!({ "files": *children })),
+    )
+        .into_response()
+}
+
+async fn list_inner(state: Arc<AppState>, dir: String) -> Result<Arc<Vec<FileInfo>>, Error> {
+    let list_cache = &state.list_cache;
+    if let Some(cached) = list_cache.get(&dir) {
+        return Ok(cached);
     }
 
-    let item_location = ItemLocation::from_path(&dir).ok_or(ListError::LocationNotFound {
+    let item_location = ItemLocation::from_path(&dir).ok_or(Error::LocationNotFound {
         location: dir.to_string(),
     });
 
     let item_location = match item_location {
         Ok(item_location) => item_location,
-        Err(e) => return e.into_response(),
+        Err(e) => return Err(e),
     };
 
+    let drive = match DRIVE.get() {
+        Some(drive) => drive,
+        None => return Err(Error::StillStarting),
+    };
     let children = drive.load().drive.list_children(item_location).await;
 
     match children {
         Ok(children) => {
-            let children = Arc::new(map_item(children));
-            cache.insert(home_dir.to_string(), children.clone());
+            let children = Arc::new(map_item(children, Some(&state.download_cache)));
+            list_cache.insert(dir.to_string(), children.clone());
 
-            (
-                axum::http::StatusCode::OK,
-                Json(json!({ "files": *children })),
-            )
-                .into_response()
+            Ok(children)
         }
-        Err(e) => ListError::ListChildren { source: e }.into_response(),
-    }
-}
-
-async fn list_home(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let home_dir = &state.home_dir;
-
-    let list_cache = &state.list_cache;
-    let download_cache = &state.download_cache;
-    if let Some(cached) = list_cache.get(home_dir) {
-        return (
-            axum::http::StatusCode::OK,
-            Json(json!({ "files": *cached })),
-        )
-            .into_response();
-    }
-
-    let drive = match DRIVE.get() {
-        Some(drive) => drive,
-        None => return ListError::StillStarting.into_response(),
-    };
-
-    let item_location = ItemLocation::from_path(&home_dir).ok_or(ListError::LocationNotFound {
-        location: home_dir.to_string(),
-    });
-
-    let item_location = match item_location {
-        Ok(item_location) => item_location,
-        Err(e) => return e.into_response(),
-    };
-
-    let children = drive.load_full().drive.list_children(item_location).await;
-
-    match children {
-        Ok(children) => {
-            let children = Arc::new(map_item(children));
-            list_cache.insert(home_dir.to_string(), children.clone());
-            for child in children.iter() {
-                if !child.download_url.is_empty() && !child.id.is_empty() {
-                    download_cache.insert(child.id.clone(), child.download_url.clone());
-                }
-            }
-
-            (
-                axum::http::StatusCode::OK,
-                Json(json!({ "files": *children })),
-            )
-                .into_response()
-        }
-        Err(e) => ListError::ListChildren { source: e }.into_response(),
+        Err(e) => Err(Error::ListChildren { source: e }),
     }
 }
 
 #[derive(Debug, Snafu)]
 #[snafu(visibility(pub(crate)))]
-enum ListError {
+enum Error {
     #[snafu(display("Server still in the process of starting up"))]
     StillStarting,
 
@@ -133,7 +110,7 @@ enum ListError {
     ListChildren { source: onedrive_api::Error },
 }
 
-impl IntoResponse for ListError {
+impl IntoResponse for Error {
     fn into_response(self) -> axum::http::Response<axum::body::Body> {
         (
             axum::http::StatusCode::INTERNAL_SERVER_ERROR,
@@ -152,17 +129,63 @@ pub fn router(state: Arc<AppState>) -> axum::Router {
     axum::Router::new().nest("/list", route)
 }
 
-fn map_item(item: Vec<DriveItem>) -> Vec<FileInfo> {
-    item.into_iter()
-        .map(|child| FileInfo {
-            name: child.name.unwrap_or_default(),
-            size: child.size.unwrap_or_default(),
-            id: child.id.and_then(|id| id.0.into()).unwrap_or_default(),
-            last_modified_date_time: date_time_to_timestamp(child.last_modified_date_time),
-            created_date_time: date_time_to_timestamp(child.created_date_time),
-            download_url: child.download_url.unwrap_or_default(),
-        })
+fn map_item(item: Vec<DriveItem>, cache: Option<&Cache<String, String>>) -> Vec<FileInfo> {
+    let iter = item.into_iter().map(|child| {
+        (
+            child.name.unwrap_or_default(),
+            child.size.unwrap_or_default(),
+            child.id.and_then(|id| id.0.into()).unwrap_or_default(),
+            date_time_to_timestamp(child.last_modified_date_time),
+            date_time_to_timestamp(child.created_date_time),
+            child.download_url.unwrap_or_default(),
+        )
+    });
+
+    let iter = if let Some(cache) = cache {
+        iter.map(
+            |(name, size, id, last_modified_date_time, created_date_time, download_url)| {
+                if !download_url.is_empty() && !id.is_empty() {
+                    cache.insert(id.clone(), download_url.clone());
+                }
+                let file_type = if download_url.is_empty() {
+                    FileTypes::Folder
+                } else {
+                    FileTypes::File
+                };
+
+                FileInfo {
+                    id,
+                    name,
+                    size,
+                    last_modified_date_time,
+                    created_date_time,
+                    file_type,
+                }
+            },
+        )
         .collect()
+    } else {
+        iter.map(
+            |(name, size, id, last_modified_date_time, created_date_time, download_url)| {
+                let file_type = if download_url.is_empty() {
+                    FileTypes::Folder
+                } else {
+                    FileTypes::File
+                };
+                FileInfo {
+                    id,
+                    name,
+                    size,
+                    last_modified_date_time,
+                    created_date_time,
+                    file_type,
+                }
+            },
+        )
+        .collect()
+    };
+
+    iter
 }
 
 fn date_time_to_timestamp(date_time: Option<String>) -> i64 {
