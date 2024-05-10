@@ -1,10 +1,7 @@
 <script setup lang="ts">
-import { RouterLink, RouterView } from 'vue-router'
-import { defineComponent, ref } from 'vue'
-import { darkTheme } from 'naive-ui'
-import type { GlobalTheme } from 'naive-ui'
 
-const theme = ref<GlobalTheme>(darkTheme)
+
+const theme = ref<any>(darkTheme)
 
 const toggleTheme = () => {
   theme.value = theme.value === darkTheme ? undefined : darkTheme

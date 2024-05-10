@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { defineComponent, ref } from 'vue'
+import {  h, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -58,7 +58,7 @@ const pagination = {
   pageSize: 10,
 }
 
-const data = ref([])
+const data:any= ref([])
 
 const refreshData = async () => {
   let path = window.location.pathname
@@ -75,7 +75,7 @@ const refreshData = async () => {
     const json = await res.json()
     const files = json.files
     data.value = []
-    files.forEach((file) => {
+    files.forEach((file: { type: string; name: any; id: any; size: number; created_date_time: number; last_modified_date_time: number; }) => {
       let action;
       if (file.type === 'Folder') {
         if (path === '') {
