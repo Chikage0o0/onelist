@@ -9,6 +9,7 @@ use axum::{
 };
 
 use onedrive_api::{ItemId, ItemLocation};
+use reqwest::header;
 use serde_json::json;
 use snafu::{ResultExt, Snafu};
 
@@ -78,12 +79,47 @@ async fn proxy_download_file(
     };
 
     let req = reqwest::get(&url).await.context(ProxyDownloadSnafu);
-    if req.is_err() {
-        return req.unwrap_err().into_response();
-    }
-    let body = req.unwrap().bytes_stream();
+    let (headers, body) = match req {
+        Ok(resp) => {
+            let headers = resp.headers().clone();
+            let body = resp.bytes_stream();
+            (headers, body)
+        }
+        Err(e) => return e.into_response(),
+    };
 
-    Response::new(Body::from_stream(body)).into_response()
+    Response::builder()
+        .status(200)
+        .header(
+            header::CONTENT_TYPE,
+            headers
+                .get(header::CONTENT_TYPE)
+                .map(|v| v.to_str().unwrap())
+                .unwrap_or("application/octet-stream"),
+        )
+        .header(
+            header::CONTENT_DISPOSITION,
+            headers
+                .get(header::CONTENT_DISPOSITION)
+                .map(|v| v.to_str().unwrap())
+                .unwrap_or("attachment"),
+        )
+        .header(
+            header::CONTENT_LENGTH,
+            headers
+                .get(header::CONTENT_LENGTH)
+                .map(|v| v.to_str().unwrap())
+                .unwrap_or("0"),
+        )
+        .header(
+            header::CACHE_CONTROL,
+            headers
+                .get(header::CACHE_CONTROL)
+                .map(|v| v.to_str().unwrap())
+                .unwrap_or("no-cache"),
+        )
+        .body(Body::from_stream(body))
+        .unwrap()
 }
 
 #[derive(Debug, Snafu)]
