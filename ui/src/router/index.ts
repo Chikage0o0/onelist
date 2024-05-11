@@ -15,6 +15,12 @@ const router = createRouter({
       name: "list",
       component: HomeView,
     },
+    {
+      // not found handler
+      path: "/:pathMatch(.*)*",
+      name: "not-found",
+      component: () => import("@/views/NotFoundView.vue"),
+    },
   ],
 });
 

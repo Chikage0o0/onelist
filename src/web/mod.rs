@@ -18,10 +18,11 @@ use tracing::info;
 
 use crate::{utils::config::Setting, NAME};
 
-use self::list::FileInfo;
+use self::{list::FileInfo, thumb::Thumbnails};
 
 mod download;
 mod list;
+mod thumb;
 
 pub async fn web_server(config: Setting) {
     let app = router(config.clone());
@@ -45,6 +46,7 @@ struct AppState {
     home_dir: String,
     download_cache: Cache<String, String>,
     list_cache: Cache<String, Arc<Vec<FileInfo>>>,
+    thumb_cache: Cache<String, Arc<Thumbnails>>,
 }
 
 fn router(config: Setting) -> Router {
@@ -60,16 +62,21 @@ fn router(config: Setting) -> Router {
     let list_cache = Cache::builder()
         .time_to_live(Duration::from_secs(60 * 30))
         .build();
+    let thumb_cache = Cache::builder()
+        .time_to_live(Duration::from_secs(60 * 10))
+        .build();
 
     let state = Arc::new(AppState {
         home_dir,
         download_cache,
         list_cache,
+        thumb_cache,
     });
 
     let router = Router::new()
         .merge(list::router(state.clone()))
-        .merge(download::router(state.clone(), config.setting.use_proxy));
+        .merge(download::router(state.clone(), config.setting.use_proxy))
+        .merge(thumb::router(state.clone(), config.setting.use_proxy));
 
     Router::new()
         .nest("/api", router)

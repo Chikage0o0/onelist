@@ -13,14 +13,33 @@ futures-util = "0.3.30"
 mime_guess = "2.0.4"
 mini-moka = "0.10.3"
 onedrive-api = "0.10.0"
-reqwest = { version = "0.12.4", features = ["json", "stream"] }
+reqwest = { version = "0.12.4", features = [
+    "json",
+    "stream",
+    "brotli",
+    "gzip",
+    "zstd",
+] }
 rust-embed = "8.3.0"
 serde = { version = "1.0.201", features = ["derive"] }
 serde_json = "1.0.117"
 snafu = "0.8.2"
-tokio = { version = "1.37.0", features = ["full"] }
+tokio = { version = "1.37.0", features = [
+    "macros",
+    "rt-multi-thread",
+    "signal",
+] }
 toml = "0.8.12"
 tower-http = { version = "0.5.2", features = ["trace", "compression-full"] }
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
 url = "2.5.0"
+openssl-sys = { version = "0.9.102", features = ["vendored"] }
+
+
+[profile.release]
+panic = "abort"   # Strip expensive panic clean-up logic
+lto = "thin"      # Use Thin LTO for better compile times
+strip = true      # Remove debug symbols
+opt-level = "z"
+codegen-units = 1
