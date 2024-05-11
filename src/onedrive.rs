@@ -37,9 +37,7 @@ impl Onedrive {
     pub async fn new(client_id: &str, client_secret: &str, refresh_token: &Option<String>) -> Self {
         let auth = onedrive_api::Auth::new(
             client_id,
-            onedrive_api::Permission::new_read()
-                .offline_access(true)
-                .write(true),
+            onedrive_api::Permission::new_read().offline_access(true),
             "http://localhost:10080/redirect",
             onedrive_api::Tenant::Organizations,
         );

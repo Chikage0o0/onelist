@@ -1,6 +1,9 @@
+use std::path::Path;
+
 use config::Config;
 use serde::{Deserialize, Serialize};
 use snafu::ResultExt;
+use tracing::{info, warn};
 
 use crate::error::{ConfigParseFailedSnafu, Error, WriteConfigFailedSnafu};
 
@@ -8,15 +11,22 @@ static CONFIG_PATH: &str = "config.toml";
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Setting {
-    pub server: Server,
-    pub home_dir: String,
+    pub auth: Auth,
+    pub setting: UserSetting,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct Server {
+pub struct Auth {
     pub client_id: String,
     pub client_secret: String,
     pub refresh_token: Option<String>,
+}
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct UserSetting {
+    pub home_dir: String,
+    pub use_proxy: bool,
+    pub name: String,
+    pub port: u16,
 }
 
 impl Setting {
@@ -29,7 +39,6 @@ impl Setting {
             .add_source(config::Environment::with_prefix("APP"))
             .build()
             .context(ConfigParseFailedSnafu)?;
-
         Ok(settings.try_deserialize().context(ConfigParseFailedSnafu)?)
     }
 
@@ -38,7 +47,7 @@ impl Setting {
         if let Some(drive) = crate::DRIVE.get() {
             let refresh_token = drive.load().token.refresh_token.clone();
             if let Some(refresh_token) = refresh_token {
-                self.server.refresh_token = Some(refresh_token);
+                self.auth.refresh_token = Some(refresh_token);
             }
         }
 
@@ -52,6 +61,36 @@ impl Setting {
     }
 }
 
+pub async fn handle_error(e: Error) {
+    if let Error::ConfigParseFailed { source: _ } = e {
+        let path = Path::new(CONFIG_PATH);
+        if path.exists() {
+            warn!("Failed to parse the config file, bakup the config file");
+            // bakup the config file
+            let backup_path = path.with_extension("bak");
+            let _ = tokio::fs::rename(path, backup_path).await;
+        }
+
+        // create a new config file
+        let mut new_config = Setting {
+            auth: Auth {
+                client_id: "".to_string(),
+                client_secret: "".to_string(),
+                refresh_token: None,
+            },
+            setting: UserSetting {
+                home_dir: "/".to_string(),
+                use_proxy: false,
+                name: "Onelist".to_string(),
+                port: 3000,
+            },
+        };
+
+        let _ = new_config.save().await;
+        info!("A new config file has been created, please fill in the necessary information");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -59,18 +98,23 @@ mod tests {
     #[tokio::test]
     async fn test_setting() {
         let mut setting = Setting {
-            server: Server {
+            auth: Auth {
                 client_id: "client_id".to_string(),
                 client_secret: "client_secret".to_string(),
                 refresh_token: None,
             },
-            home_dir: "home_dir".to_string(),
+            setting: UserSetting {
+                home_dir: "/".to_string(),
+                use_proxy: false,
+                name: "name".to_string(),
+                port: 3000,
+            },
         };
 
         setting.save().await.unwrap();
 
         let loaded_setting = Setting::load().unwrap();
-        assert_eq!(setting.server.client_id, loaded_setting.server.client_id);
+        assert_eq!(setting.auth.client_id, loaded_setting.auth.client_id);
 
         std::fs::remove_file(CONFIG_PATH).unwrap();
     }

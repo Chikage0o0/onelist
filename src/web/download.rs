@@ -165,11 +165,14 @@ impl IntoResponse for Error {
     }
 }
 
-pub fn router(state: Arc<AppState>) -> axum::Router {
-    let route = axum::Router::new()
-        .route("/raw/:id", get(download_file))
-        .route("/proxy/:id", get(proxy_download_file))
-        .with_state(state);
+pub fn router(state: Arc<AppState>, use_proxy: bool) -> axum::Router {
+    let route = axum::Router::new();
+    let route = if use_proxy {
+        route.route("/:id", get(proxy_download_file))
+    } else {
+        route.route("/:id", get(download_file))
+    }
+    .with_state(state);
 
     axum::Router::new().nest("/download", route)
 }

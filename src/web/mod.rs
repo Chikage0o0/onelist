@@ -1,18 +1,22 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    borrow::Cow,
+    sync::{Arc, OnceLock},
+    time::Duration,
+};
 
 use axum::{
-    http::Uri,
-    response::{IntoResponse, Response},
+    http::{header, StatusCode, Uri},
+    response::{Html, IntoResponse, Response},
     routing::get,
     Router,
 };
 use mini_moka::sync::Cache;
-use reqwest::{header, StatusCode};
 use rust_embed::RustEmbed;
 use tokio::signal;
+use tower_http::{compression::CompressionLayer, trace::TraceLayer};
 use tracing::info;
 
-use crate::utils::config::Setting;
+use crate::{utils::config::Setting, NAME};
 
 use self::list::FileInfo;
 
@@ -20,12 +24,14 @@ mod download;
 mod list;
 
 pub async fn web_server(config: Setting) {
-    let app = router(config);
+    let app = router(config.clone());
 
     info!("Starting the web server");
 
     // run our app with hyper, listening globally on port 3000
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", config.setting.port))
+        .await
+        .unwrap();
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await
@@ -42,10 +48,10 @@ struct AppState {
 }
 
 fn router(config: Setting) -> Router {
-    let home_dir = if config.home_dir.starts_with('/') {
-        config.home_dir
+    let home_dir = if config.setting.home_dir.starts_with('/') {
+        config.setting.home_dir
     } else {
-        format!("/{}", config.home_dir)
+        format!("/{}", config.setting.home_dir)
     };
 
     let download_cache = Cache::builder()
@@ -60,16 +66,16 @@ fn router(config: Setting) -> Router {
         download_cache,
         list_cache,
     });
+
     let router = Router::new()
         .merge(list::router(state.clone()))
-        .merge(download::router(state.clone()));
+        .merge(download::router(state.clone(), config.setting.use_proxy));
 
     Router::new()
         .nest("/api", router)
-        .route("/", get(index_handler))
-        .route("/index.html", get(index_handler))
-        .route("/dist/*file", get(static_handler))
-        .fallback_service(get(index_handler))
+        .fallback_service(get(static_handler))
+        .layer(TraceLayer::new_for_http())
+        .layer(CompressionLayer::new())
 }
 
 async fn shutdown_signal() {
@@ -96,44 +102,56 @@ async fn shutdown_signal() {
     }
 }
 
-// We use static route matchers ("/" and "/index.html") to serve our home
-// page.
-async fn index_handler() -> impl IntoResponse {
-    static_handler("/index.html".parse::<Uri>().unwrap()).await
-}
-
-// We use a wildcard matcher ("/dist/*file") to match against everything
-// within our defined assets directory. This is the directory on our Asset
-// struct below, where folder = "examples/public/".
-async fn static_handler(uri: Uri) -> impl IntoResponse {
-    let mut path = uri.path().trim_start_matches('/').to_string();
-
-    if path.starts_with("dist/") {
-        path = path.replace("dist/", "");
-    }
-
-    StaticFile(path)
-}
+static INDEX_HTML: &str = "index.html";
 
 #[derive(RustEmbed)]
 #[folder = "ui/dist"]
-struct Asset;
+struct Assets;
 
-pub struct StaticFile<T>(pub T);
+async fn static_handler(uri: Uri) -> impl IntoResponse {
+    let path = uri.path().trim_start_matches('/');
 
-impl<T> IntoResponse for StaticFile<T>
-where
-    T: Into<String>,
-{
-    fn into_response(self) -> Response {
-        let path = self.0.into();
+    if path.is_empty() || path == INDEX_HTML {
+        return index_html().await;
+    }
 
-        match Asset::get(path.as_str()) {
-            Some(content) => {
-                let mime = mime_guess::from_path(path).first_or_octet_stream();
-                ([(header::CONTENT_TYPE, mime.as_ref())], content.data).into_response()
+    match Assets::get(path) {
+        Some(content) => {
+            let mime = mime_guess::from_path(path).first_or_octet_stream();
+            ([(header::CONTENT_TYPE, mime.as_ref())], content.data).into_response()
+        }
+        None => {
+            if path.contains('.') {
+                return not_found().await;
             }
-            None => (StatusCode::NOT_FOUND, "404 Not Found").into_response(),
+
+            index_html().await
         }
     }
+}
+
+static INDEX_BYTE: OnceLock<Cow<'static, [u8]>> = OnceLock::new();
+
+async fn index_html() -> Response {
+    match Assets::get(INDEX_HTML) {
+        Some(content) => {
+            // replace the placeholder with the actual name
+            let byte = INDEX_BYTE.get_or_init(|| {
+                let name = NAME.get().unwrap();
+                let content = content.data;
+                let string = String::from_utf8_lossy(&content);
+                let content = string.replace("{{NAME}}", name).as_bytes().to_vec();
+
+                Cow::Owned(content)
+            });
+
+            Html(byte.to_owned()).into_response()
+            // replace the placeholder with the actual name
+        }
+        None => not_found().await,
+    }
+}
+
+async fn not_found() -> Response {
+    (StatusCode::NOT_FOUND, "404").into_response()
 }

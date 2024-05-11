@@ -5,7 +5,7 @@ use onedrive::Onedrive;
 
 use tracing::{info, warn};
 
-use crate::web::web_server;
+use crate::{utils::config::handle_error, web::web_server};
 
 mod error;
 mod onedrive;
@@ -15,19 +15,30 @@ mod worker;
 
 static DRIVE: OnceLock<ArcSwap<Onedrive>> = OnceLock::new();
 
+// For replacing the name of the frontend
+static NAME: OnceLock<String> = OnceLock::new();
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
     info!("Starting the program");
 
     info!("Loading the configuration");
-    let mut config = utils::config::Setting::load().unwrap();
+    let mut config = match utils::config::Setting::load() {
+        Ok(config) => config,
+        Err(e) => {
+            warn!("Failed to load the configuration: {:?}", e);
+            handle_error(e).await;
+            panic!("Failed to load the configuration")
+        }
+    };
     info!("Configuration loaded: {:?}", config);
+    NAME.set(config.setting.name.clone()).unwrap();
 
     let onedrive = Onedrive::new(
-        &config.server.client_id,
-        &config.server.client_secret,
-        &config.server.refresh_token,
+        &config.auth.client_id,
+        &config.auth.client_secret,
+        &config.auth.refresh_token,
     )
     .await;
     DRIVE.set(ArcSwap::from_pointee(onedrive)).unwrap();
