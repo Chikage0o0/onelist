@@ -16,6 +16,11 @@ const router = createRouter({
       component: HomeView,
     },
     {
+      path: "/view/:id",
+      name: "view",
+      component: () => import("@/views/VideoView.vue"),
+    },
+    {
       // not found handler
       path: "/:pathMatch(.*)*",
       name: "not-found",
