@@ -97,7 +97,7 @@ async fn thumb_inner(state: Arc<AppState>, id: &str) -> Result<Arc<Thumbnails>, 
     let thumb_cache = &state.cache.thumb_cache;
     let cached_thumb = thumb_cache.get(&id.to_string());
     match cached_thumb {
-        Some(thumb) => return Ok(thumb.clone()),
+        Some(thumb) => Ok(thumb.clone()),
         None => {
             let thumb = drive
                 .load()
@@ -111,7 +111,7 @@ async fn thumb_inner(state: Arc<AppState>, id: &str) -> Result<Arc<Thumbnails>, 
             let thumb = match thumb {
                 Ok(Some(item)) => {
                     if let Some(thumbnails) = &item.thumbnails {
-                        Arc::new(parse_thumb(thumbnails).context(ParseSnafu)?)
+                        Arc::new(parse_thumb(thumbnails).context(ParseFailedSnafu)?)
                     } else {
                         return Err(Error::IdNotFound { id: id.to_string() });
                     }
@@ -140,7 +140,7 @@ enum Error {
     GetItemInfo { source: onedrive_api::Error },
 
     #[snafu(display("Failed to parse the thumb: {}", source))]
-    ParseError { source: crate::model::thumb::Error },
+    ParseFailed { source: crate::model::thumb::Error },
 }
 
 impl IntoResponse for Error {

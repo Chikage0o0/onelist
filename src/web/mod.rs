@@ -145,7 +145,7 @@ async fn index_html() -> Response {
                 Cow::Owned(content)
             });
 
-            Html(byte.to_owned()).into_response()
+            Html(byte.clone()).into_response()
             // replace the placeholder with the actual name
         }
         None => not_found().await,

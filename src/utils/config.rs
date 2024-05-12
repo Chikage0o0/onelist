@@ -39,7 +39,7 @@ impl Setting {
             .add_source(config::Environment::with_prefix("APP"))
             .build()
             .context(ConfigParseFailedSnafu)?;
-        Ok(settings.try_deserialize().context(ConfigParseFailedSnafu)?)
+        settings.try_deserialize().context(ConfigParseFailedSnafu)
     }
 
     pub async fn save(&mut self) -> Result<(), Error> {

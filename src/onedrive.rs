@@ -74,19 +74,19 @@ impl Onedrive {
             let mut input = String::new();
             io::stdin()
                 .read_line(&mut input)
-                .context(GetRedirectUrlFailedSnafu)?;
+                .context(GetRedirectUrlSnafu)?;
             Ok(input)
         });
 
         let input = input.await.unwrap()?;
 
-        let code = parse_code(&input).ok_or(ParseCodeFailedSnafu { s: input }.build())?;
+        let code = parse_code(&input).ok_or(ParseCodeSnafu { s: input }.build())?;
         let client_secret = ClientCredential::Secret(client_secret.to_string());
         // Get the token from the code
         let token = auth
             .login_with_code(&code, &client_secret)
             .await
-            .context(RefreshTokenFailedSnafu)?
+            .context(RefreshTokenSnafu)?
             .into();
 
         Ok(token)
@@ -118,7 +118,7 @@ impl Onedrive {
         let new_token = Self::login_with_refresh_token(
             &self.auth,
             &self.client_secret,
-            &self.token.refresh_token.as_ref().unwrap(),
+            self.token.refresh_token.as_ref().unwrap(),
         )
         .await?;
         let new_drive =
@@ -132,12 +132,12 @@ impl Onedrive {
     }
 }
 
-impl Into<Token> for TokenResponse {
-    fn into(self) -> Token {
+impl From<TokenResponse> for Token {
+    fn from(val: TokenResponse) -> Self {
         Token {
-            access_token: self.access_token,
-            refresh_token: self.refresh_token,
-            expires_at: Instant::now() + Duration::from_secs(self.expires_in_secs),
+            access_token: val.access_token,
+            refresh_token: val.refresh_token,
+            expires_at: Instant::now() + Duration::from_secs(val.expires_in_secs),
         }
     }
 }
@@ -164,11 +164,11 @@ fn parse_code(url: &str) -> Option<String> {
 #[snafu(visibility(pub(crate)))]
 pub enum Error {
     #[snafu(display("Failed to refresh the token {}", source))]
-    RefreshTokenFailed { source: onedrive_api::Error },
+    RefreshToken { source: onedrive_api::Error },
 
     #[snafu(display("Failed to parse the code {}", s))]
-    ParseCodeFailed { s: String },
+    ParseCode { s: String },
 
     #[snafu(display("Failed to login {}", source))]
-    GetRedirectUrlFailed { source: io::Error },
+    GetRedirectUrl { source: io::Error },
 }

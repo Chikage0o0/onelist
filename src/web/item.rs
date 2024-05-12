@@ -45,9 +45,10 @@ async fn get_item(State(state): State<Arc<AppState>>, Path(p): Path<String>) -> 
             .get_item_with_option(item_location, option)
             .await;
 
-        let file = match file {
+        match file {
             Ok(Some(file)) => {
-                let item = parse_item(&file, &state.cache, &state.home_dir).context(ParseSnafu);
+                let item =
+                    parse_item(&file, &state.cache, &state.home_dir).context(ParseFailedSnafu);
                 match item {
                     Ok(item) => Arc::new(item),
                     Err(e) => return e.into_response(),
@@ -58,8 +59,7 @@ async fn get_item(State(state): State<Arc<AppState>>, Path(p): Path<String>) -> 
             }
 
             Err(e) => return Error::GetFile { source: e }.into_response(),
-        };
-        file
+        }
     };
 
     (axum::http::StatusCode::OK, Json(json!({ "file": *file }))).into_response()
@@ -75,7 +75,7 @@ enum Error {
     GetFile { source: onedrive_api::Error },
 
     #[snafu(display("Failed to parse the thumb: {}", source))]
-    ParseError { source: crate::model::item::Error },
+    ParseFailed { source: crate::model::item::Error },
 
     #[snafu(display("Failed to get item info"))]
     GetItemInfo,
