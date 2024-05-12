@@ -31,6 +31,13 @@ onMounted(() => {
 });
 </script>
 
+<style scoped>
+.link {
+  color: #1890ff;
+  text-decoration: none;
+}
+</style>
+
 <template>
   <n-config-provider :theme="uiTheme" :locale="zhCN" :date-locale="dateZhCN">
     <n-loading-bar-provider>
@@ -47,7 +54,8 @@ onMounted(() => {
         </n-layout>
         <n-layout-footer position="absolute" style="height: 64px">
           <n-flex justify="center" style="padding-top: 12px;">
-            <p>Powered by onelist, develop by Chikage</p>
+            <p>Powered by <a href="https://github.com/Chikage0o0/onelist" class="link" target="_blank">OneList</a>
+              ,developed by <a href="https://github.com/Chikage0o0" class="link" target="_blank">Chikage</a>.</p>
           </n-flex>
         </n-layout-footer>
       </n-layout>
