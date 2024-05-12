@@ -126,13 +126,7 @@ async fn static_handler(uri: Uri) -> impl IntoResponse {
             let mime = mime_guess::from_path(path).first_or_octet_stream();
             ([(header::CONTENT_TYPE, mime.as_ref())], content.data).into_response()
         }
-        None => {
-            if path.contains('.') {
-                return not_found().await;
-            }
-
-            index_html().await
-        }
+        None => index_html().await,
     }
 }
 
