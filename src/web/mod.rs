@@ -5,7 +5,8 @@ use std::{
 };
 
 use axum::{
-    http::{header, StatusCode, Uri},
+    body::Body,
+    http::{header, HeaderMap, StatusCode, Uri},
     response::{Html, IntoResponse, Response},
     routing::get,
     Router,
@@ -13,14 +14,13 @@ use axum::{
 use mini_moka::sync::Cache;
 use rust_embed::RustEmbed;
 use tokio::signal;
-use tower_http::{compression::CompressionLayer, trace::TraceLayer};
+use tower_http::{compression::CompressionLayer, timeout::TimeoutLayer, trace::TraceLayer};
 use tracing::info;
 
-use crate::{utils::config::Setting, NAME};
-
-use self::{list::FileInfo, thumb::Thumbnails};
+use crate::{model::Caches, utils::config::Setting, NAME};
 
 mod download;
+mod item;
 mod list;
 mod thumb;
 
@@ -44,10 +44,10 @@ pub async fn web_server(config: Setting) {
 #[derive(Debug)]
 struct AppState {
     home_dir: String,
-    download_cache: Cache<String, String>,
-    list_cache: Cache<String, Arc<Vec<FileInfo>>>,
-    thumb_cache: Cache<String, Arc<Thumbnails>>,
+    cache: Caches,
 }
+
+const CACHE_DURATION: Duration = Duration::from_secs(60 * 10);
 
 fn router(config: Setting) -> Router {
     let home_dir = if config.setting.home_dir.starts_with('/') {
@@ -56,33 +56,32 @@ fn router(config: Setting) -> Router {
         format!("/{}", config.setting.home_dir)
     };
 
-    let download_cache = Cache::builder()
-        .time_to_live(Duration::from_secs(60 * 10))
-        .build();
-    let list_cache = Cache::builder()
-        .time_to_live(Duration::from_secs(60 * 30))
-        .build();
-    let thumb_cache = Cache::builder()
-        .time_to_live(Duration::from_secs(60 * 10))
-        .build();
-
+    let download_url_cache = Cache::builder().time_to_live(CACHE_DURATION).build();
+    let list_cache = Cache::builder().time_to_live(CACHE_DURATION).build();
+    let thumb_cache = Cache::builder().time_to_live(CACHE_DURATION).build();
+    let file_cache = Cache::builder().time_to_live(CACHE_DURATION).build();
     let state = Arc::new(AppState {
         home_dir,
-        download_cache,
-        list_cache,
-        thumb_cache,
+        cache: Caches {
+            download_url_cache,
+            list_cache,
+            thumb_cache,
+            file_cache,
+        },
     });
 
     let router = Router::new()
         .merge(list::router(state.clone()))
+        .merge(thumb::router(state.clone(), config.setting.use_proxy))
         .merge(download::router(state.clone(), config.setting.use_proxy))
-        .merge(thumb::router(state.clone(), config.setting.use_proxy));
+        .merge(item::router(state.clone()));
 
     Router::new()
         .nest("/api", router)
         .fallback_service(get(static_handler))
         .layer(TraceLayer::new_for_http())
         .layer(CompressionLayer::new())
+        .layer(TimeoutLayer::new(Duration::from_secs(10)))
 }
 
 async fn shutdown_signal() {
@@ -161,4 +160,38 @@ async fn index_html() -> Response {
 
 async fn not_found() -> Response {
     (StatusCode::NOT_FOUND, "404").into_response()
+}
+
+async fn reverse_proxy(mut header: HeaderMap, url: String) -> impl IntoResponse {
+    let client = reqwest::Client::new();
+
+    header.remove("host");
+    header.remove("referer");
+
+    let response = client.get(&url).headers(header).send().await;
+    match response {
+        Ok(response) => {
+            let status = response.status();
+            let headers = response.headers().clone();
+            let body = response.bytes_stream();
+            let response = Response::builder().status(status);
+            let response = headers.iter().fold(response, |response, (key, value)| {
+                response.header(key, value)
+            });
+            let response = response.body(Body::from_stream(body));
+            response.unwrap_or(
+                Response::builder()
+                    .status(StatusCode::INTERNAL_SERVER_ERROR)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+        }
+        Err(e) => {
+            let body = format!("Failed to proxy the download: {}", e);
+            Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Body::from(body))
+                .unwrap()
+        }
+    }
 }

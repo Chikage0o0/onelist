@@ -8,6 +8,7 @@ use tracing::{info, warn};
 use crate::{utils::config::handle_error, web::web_server};
 
 mod error;
+mod model;
 mod onedrive;
 mod utils;
 mod web;

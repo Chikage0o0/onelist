@@ -34,17 +34,19 @@ onMounted(() => {
 <template>
   <n-config-provider :theme="uiTheme" :locale="zhCN" :date-locale="dateZhCN">
     <n-loading-bar-provider>
-      <n-layout position="absolute" embedded>
+      <n-layout position="absolute">
         <n-layout-header style="height: 64px; padding: 12px">
           <n-flex justify="center">
             <h1 style="margin: 0;">{{ name }}</h1>
           </n-flex>
         </n-layout-header>
-        <n-layout-content content-style="padding: 24px;" :native-scrollbar="false">
-          <RouterView />
-        </n-layout-content>
-        <n-layout-footer position="absolute">
-          <n-flex justify="center">
+        <n-layout position="absolute" style="top: 64px; bottom: 64px" :native-scrollbar="false">
+          <n-layout content-style="padding: 24px;">
+            <RouterView />
+          </n-layout>
+        </n-layout>
+        <n-layout-footer position="absolute" style="height: 64px">
+          <n-flex justify="center" style="padding-top: 12px;">
             <p>Powered by onelist, develop by Chikage</p>
           </n-flex>
         </n-layout-footer>

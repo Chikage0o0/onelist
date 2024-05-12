@@ -1,22 +1,21 @@
 use std::sync::Arc;
 
 use axum::{
-    body::Body,
     extract::{Path, State},
     http::HeaderMap,
-    response::{IntoResponse, Redirect, Response},
+    response::{IntoResponse, Redirect},
     routing::get,
     Json,
 };
 
 use onedrive_api::{ItemId, ItemLocation};
-use reqwest::header;
+
 use serde_json::json;
-use snafu::{ResultExt, Snafu};
+use snafu::Snafu;
 
 use crate::DRIVE;
 
-use super::AppState;
+use super::{reverse_proxy, AppState};
 
 async fn download_file(
     State(state): State<Arc<AppState>>,
@@ -27,7 +26,7 @@ async fn download_file(
         None => return Error::StillStarting.into_response(),
     };
 
-    let cache = state.download_cache.clone();
+    let cache = state.cache.download_url_cache.clone();
     let cached_url = cache.get(&id);
     let url = if let Some(url) = cached_url {
         url
@@ -52,15 +51,15 @@ async fn download_file(
 
 async fn proxy_download_file(
     State(state): State<Arc<AppState>>,
-    headers: HeaderMap,
     Path(id): Path<String>,
+    headers: HeaderMap,
 ) -> impl IntoResponse {
     let drive = match DRIVE.get() {
         Some(drive) => drive,
         None => return Error::StillStarting.into_response(),
     };
 
-    let cache = state.download_cache.clone();
+    let cache = state.cache.download_url_cache.clone();
     let cached_url = cache.get(&id);
     let url = if let Some(url) = cached_url {
         url
@@ -80,66 +79,9 @@ async fn proxy_download_file(
         }
     };
 
-    let req = reqwest::Client::new()
-        .get(&url)
-        .header(
-            header::ACCEPT,
-            headers
-                .get(header::ACCEPT)
-                .map(|v| v.to_str().unwrap())
-                .unwrap_or("*/*"),
-        )
-        .header(
-            header::CONTENT_RANGE,
-            headers
-                .get(header::CONTENT_RANGE)
-                .map(|v| v.to_str().unwrap())
-                .unwrap_or(""),
-        )
-        .send()
+    reverse_proxy(headers, url.to_string())
         .await
-        .context(ProxyDownloadSnafu);
-    let (headers, body) = match req {
-        Ok(resp) => {
-            let headers = resp.headers().clone();
-            let body = resp.bytes_stream();
-            (headers, body)
-        }
-        Err(e) => return e.into_response(),
-    };
-
-    Response::builder()
-        .status(200)
-        .header(
-            header::CONTENT_TYPE,
-            headers
-                .get(header::CONTENT_TYPE)
-                .map(|v| v.to_str().unwrap())
-                .unwrap_or("application/octet-stream"),
-        )
-        .header(
-            header::CONTENT_DISPOSITION,
-            headers
-                .get(header::CONTENT_DISPOSITION)
-                .map(|v| v.to_str().unwrap())
-                .unwrap_or("attachment"),
-        )
-        .header(
-            header::CONTENT_LENGTH,
-            headers
-                .get(header::CONTENT_LENGTH)
-                .map(|v| v.to_str().unwrap())
-                .unwrap_or("0"),
-        )
-        .header(
-            header::CACHE_CONTROL,
-            headers
-                .get(header::CACHE_CONTROL)
-                .map(|v| v.to_str().unwrap())
-                .unwrap_or("no-cache"),
-        )
-        .body(Body::from_stream(body))
-        .unwrap()
+        .into_response()
 }
 
 #[derive(Debug, Snafu)]
@@ -150,9 +92,6 @@ enum Error {
 
     #[snafu(display("Failed to get the download url: {}", source))]
     GetDownloadUrl { source: onedrive_api::Error },
-
-    #[snafu(display("Failed to proxy the download: {}", source))]
-    ProxyDownload { source: reqwest::Error },
 }
 
 impl IntoResponse for Error {

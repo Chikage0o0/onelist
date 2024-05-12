@@ -9,21 +9,17 @@ use axum::{
     Json,
 };
 use onedrive_api::{option::ObjectOption, resource::DriveItemField, ItemId, ItemLocation};
-use reqwest::header;
+
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use snafu::{ResultExt as _, Snafu};
 
-use crate::DRIVE;
+use crate::{
+    model::{thumb::parse_thumb, Thumbnails},
+    DRIVE,
+};
 
-use super::AppState;
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Thumbnails {
-    pub small: String,
-    pub medium: String,
-    pub large: String,
-}
+use super::{reverse_proxy, AppState};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -72,7 +68,7 @@ async fn proxy_thumb(
     Path((size, id)): Path<(Size, String)>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
-    let thumb = match thumb_inner(state, &id).await {
+    let thumb = match thumb_inner(state.clone(), &id).await {
         Ok(thumb) => thumb,
         Err(e) => return e.into_response(),
     };
@@ -87,66 +83,9 @@ async fn proxy_thumb(
         return Response::builder().status(404).body(Body::empty()).unwrap();
     }
 
-    let req = reqwest::Client::new()
-        .get(url)
-        .header(
-            header::ACCEPT,
-            headers
-                .get(header::ACCEPT)
-                .map(|v| v.to_str().unwrap())
-                .unwrap_or("*/*"),
-        )
-        .header(
-            header::CONTENT_RANGE,
-            headers
-                .get(header::CONTENT_RANGE)
-                .map(|v| v.to_str().unwrap())
-                .unwrap_or(""),
-        )
-        .send()
+    reverse_proxy(headers, url.to_string())
         .await
-        .context(ProxyDownloadSnafu);
-    let (headers, body) = match req {
-        Ok(resp) => {
-            let headers = resp.headers().clone();
-            let body = resp.bytes_stream();
-            (headers, body)
-        }
-        Err(e) => return e.into_response(),
-    };
-
-    Response::builder()
-        .status(200)
-        .header(
-            header::CONTENT_TYPE,
-            headers
-                .get(header::CONTENT_TYPE)
-                .map(|v| v.to_str().unwrap())
-                .unwrap_or("application/octet-stream"),
-        )
-        .header(
-            header::CONTENT_DISPOSITION,
-            headers
-                .get(header::CONTENT_DISPOSITION)
-                .map(|v| v.to_str().unwrap())
-                .unwrap_or("inline"),
-        )
-        .header(
-            header::CONTENT_LENGTH,
-            headers
-                .get(header::CONTENT_LENGTH)
-                .map(|v| v.to_str().unwrap())
-                .unwrap_or("0"),
-        )
-        .header(
-            header::CACHE_CONTROL,
-            headers
-                .get(header::CACHE_CONTROL)
-                .map(|v| v.to_str().unwrap())
-                .unwrap_or("no-cache"),
-        )
-        .body(Body::from_stream(body))
-        .unwrap()
+        .into_response()
 }
 
 async fn thumb_inner(state: Arc<AppState>, id: &str) -> Result<Arc<Thumbnails>, Error> {
@@ -155,7 +94,7 @@ async fn thumb_inner(state: Arc<AppState>, id: &str) -> Result<Arc<Thumbnails>, 
         None => return Err(Error::StillStarting),
     };
 
-    let thumb_cache = &state.thumb_cache;
+    let thumb_cache = &state.cache.thumb_cache;
     let cached_thumb = thumb_cache.get(&id.to_string());
     match cached_thumb {
         Some(thumb) => return Ok(thumb.clone()),
@@ -171,39 +110,13 @@ async fn thumb_inner(state: Arc<AppState>, id: &str) -> Result<Arc<Thumbnails>, 
 
             let thumb = match thumb {
                 Ok(Some(item)) => {
-                    if let Some(thumbnails) = item.thumbnails {
-                        let small = thumbnails[0]
-                            .get("small")
-                            .and_then(|v| v.get("url"))
-                            .and_then(|v| v.as_str())
-                            .unwrap_or_default();
-                        let medium = thumbnails[0]
-                            .get("medium")
-                            .and_then(|v| v.get("url"))
-                            .and_then(|v| v.as_str())
-                            .unwrap_or_default();
-                        let large = thumbnails[0]
-                            .get("large")
-                            .and_then(|v| v.get("url"))
-                            .and_then(|v| v.as_str())
-                            .unwrap_or_default();
-
-                        Arc::new(Thumbnails {
-                            small: small.to_string(),
-                            medium: medium.to_string(),
-                            large: large.to_string(),
-                        })
+                    if let Some(thumbnails) = &item.thumbnails {
+                        Arc::new(parse_thumb(thumbnails).context(ParseSnafu)?)
                     } else {
-                        return Err(Error::LocationNotFound {
-                            location: id.to_string(),
-                        });
+                        return Err(Error::IdNotFound { id: id.to_string() });
                     }
                 }
-                Ok(None) => {
-                    return Err(Error::LocationNotFound {
-                        location: id.to_string(),
-                    })
-                }
+                Ok(None) => return Err(Error::IdNotFound { id: id.to_string() }),
                 Err(e) => return Err(Error::GetItemInfo { source: e }),
             };
 
@@ -220,14 +133,14 @@ enum Error {
     #[snafu(display("Server still in the process of starting up"))]
     StillStarting,
 
-    #[snafu(display("Location not found: {}", location))]
-    LocationNotFound { location: String },
+    #[snafu(display("Location not found: {}", id))]
+    IdNotFound { id: String },
 
     #[snafu(display("Failed to GetItemInfo: {}", source))]
     GetItemInfo { source: onedrive_api::Error },
 
-    #[snafu(display("Failed to proxy the download: {}", source))]
-    ProxyDownload { source: reqwest::Error },
+    #[snafu(display("Failed to parse the thumb: {}", source))]
+    ParseError { source: crate::model::thumb::Error },
 }
 
 impl IntoResponse for Error {

@@ -23,6 +23,15 @@ const breadcrumb = ref<{
 )
 
 const update = (path: string) => {
+
+    if (path === '/') {
+        path = ''
+    }
+    if (path.startsWith('/list')) {
+        path = path.slice(5)
+    } else if (path.startsWith('/video')) {
+        path = path.slice(6)
+    }
     // Path转义
     breadcrumb.value = path.split('/').filter((item) => item !== '').map((item, index, arr) => {
         return {
@@ -32,30 +41,17 @@ const update = (path: string) => {
     })
 }
 
-watch(() => route.fullPath, (path) => {
 
-    let p = path
-    if (p === '/') {
-        p = ''
-    }
-    if (p.startsWith('/list')) {
-        p = p.slice(5)
-    }
-    update(p)
+
+watch(() => route.fullPath, (path) => {
+    update(path)
 })
+
 
 onMounted(() => {
     let p = route.fullPath
-    if (p === '/') {
-        p = ''
-    }
-    if (p.startsWith('/list')) {
-        p = p.slice(5)
-    }
     update(p)
 })
-
-
 
 const urldecode = (str: string) => {
     return decodeURIComponent(str.replace(/\+/g, '%20'))
