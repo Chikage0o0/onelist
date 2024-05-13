@@ -150,7 +150,7 @@ function triggerDownload(url: string, fileName: string) {
 
 
 
-router.afterEach(async () => {
+const unrefresh = router.afterEach(async () => {
     if (router.currentRoute.value.path.startsWith('/list') || router.currentRoute.value.path === '/') {
         await refreshData()
     }
@@ -176,6 +176,10 @@ onBeforeMount(async () => {
 onBeforeMount(async () => {
     // get now uri path
     await refreshData()
+})
+
+onUnmounted(() => {
+    unrefresh()
 })
 
 
