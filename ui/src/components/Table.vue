@@ -173,7 +173,7 @@ onBeforeMount(async () => {
     }
 })
 
-onMounted(async () => {
+onBeforeMount(async () => {
     // get now uri path
     await refreshData()
 })

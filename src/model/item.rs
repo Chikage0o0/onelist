@@ -81,7 +81,4 @@ pub fn parse_item(item: &DriveItem, caches: &Caches, home_path: &str) -> Result<
 pub enum Error {
     #[snafu(display("Missing ID"))]
     MissingId { item: DriveItem },
-
-    #[snafu(display("Error parsing thumbnail: {}", source))]
-    ParseThumb { source: thumb::Error },
 }
