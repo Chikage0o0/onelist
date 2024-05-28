@@ -15,7 +15,7 @@
 <script setup lang="ts">
 
 import DPlayer from 'dplayer';
-import { onMounted, ref } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 
 
@@ -26,6 +26,9 @@ const videoUrl = ref("");
 const thumbUrl = ref("");
 
 const name = ref('');
+
+const dp = ref<DPlayer>();
+
 
 
 
@@ -41,14 +44,32 @@ onMounted(async () => {
     console.error(error);
   }
 
-  new DPlayer({
+  dp.value = new DPlayer({
     container: document.getElementById('dplayer'),
-    screenshot: true,
     video: {
       url: videoUrl.value,
       pic: thumbUrl.value,
     },
   });
+
+  // load the video progress from local storage
+  if (videoUrl.value) {
+    let progress = localStorage.getItem('video:' + videoUrl.value);
+    if (progress) {
+      dp.value.seek(parseFloat(progress));
+    }
+  }
+
+});
+
+onUnmounted(() => {
+  // save the video progress to local storage
+  if (dp.value) {
+    if (videoUrl.value) {
+      localStorage.setItem('video:' + videoUrl.value, dp.value.video.currentTime.toString());
+    }
+  }
+
 });
 
 function triggerDownload(url: string, fileName: string) {

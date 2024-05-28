@@ -95,11 +95,21 @@ const paginationReactive = reactive({
     pageSizes: [10, 15, 20, 50, 100],
     onChange: (page: number) => {
         paginationReactive.page = page
+
+        //save to localstorage
+        let path = window.location.pathname
+        localStorage.setItem('page:' + path, paginationReactive.page.toString())
     },
     onUpdatePageSize: (pageSize: number) => {
         paginationReactive.pageSize = pageSize
         paginationReactive.page = 1
-    }
+
+        //save to localstorage
+        let path = window.location.pathname
+        localStorage.setItem('page:' + path, paginationReactive.page.toString())
+        localStorage.setItem('pageSize', paginationReactive.pageSize.toString())
+    },
+
 })
 
 const data: any = ref([])
@@ -170,6 +180,18 @@ onBeforeMount(async () => {
                 sorter: 'default'
             }
         ]
+    }
+})
+
+onMounted(async () => {
+    let path = window.location.pathname
+    const page = localStorage.getItem('page:' + path)
+    const pageSize = localStorage.getItem('pageSize')
+    if (page) {
+        paginationReactive.page = parseInt(page)
+    }
+    if (pageSize) {
+        paginationReactive.pageSize = parseInt(pageSize)
     }
 })
 
