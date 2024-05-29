@@ -14,7 +14,7 @@
 
 <script setup lang="ts">
 
-import DPlayer from 'dplayer';
+import DPlayer, { DPlayerEvents } from 'dplayer';
 import { onMounted, onUnmounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 
@@ -52,22 +52,24 @@ onMounted(async () => {
     },
   });
 
-  // load the video progress from local storage
-  if (videoUrl.value) {
-    let progress = localStorage.getItem('video:' + videoUrl.value);
-    if (progress) {
-      dp.value.seek(parseFloat(progress));
-    }
-  }
+
+
 
   // 添加监听事件
-  dp.value.on('timeupdate', () => {
-    if (videoUrl.value.video.currentTime != 0) {
+  dp.value.on('loadedmetadata' as DPlayerEvents, () => {
+    const lastTime = localStorage.getItem('video:' + videoUrl.value);
+    if (lastTime) {
+      dp.value && dp.value.seek(parseFloat(lastTime));
+    }
+  });
+
+  dp.value.on('timeupdate' as DPlayerEvents, () => {
+    if (dp.value && dp.value.video && dp.value.video.currentTime !== 0) {
       localStorage.setItem('video:' + videoUrl.value, dp.value.video.currentTime.toString());
     }
   });
 
-  dp.value.on('ended', () => {
+  dp.value.on('ended' as DPlayerEvents, () => {
     localStorage.removeItem('video:' + videoUrl.value);
   });
 
