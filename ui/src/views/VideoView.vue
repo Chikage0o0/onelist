@@ -8,6 +8,9 @@
       <n-button type="primary" size="small" icon="cloud-download" :onClick="() => triggerDownload(videoUrl, name)">
         Download
       </n-button>
+      <n-button type="primary" size="small" icon="copy" :onClick="() => copyToClipboard(videoUrl)">
+        Copy Link
+      </n-button>
     </n-flex>
   </div>
 </template>
@@ -15,6 +18,7 @@
 <script setup lang="ts">
 
 import DPlayer, { DPlayerEvents } from 'dplayer';
+import { useMessage } from 'naive-ui';
 import { onMounted, onUnmounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 
@@ -26,7 +30,7 @@ const videoUrl = ref("");
 const thumbUrl = ref("");
 
 const name = ref('');
-
+const message = useMessage();
 const dp = ref<DPlayer>();
 
 
@@ -90,6 +94,30 @@ function triggerDownload(url: string, fileName: string) {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
+
+  dp.value && dp.value.pause();
+
+  message.success('Download started',
+    {
+      duration: 2000
+    });
+}
+
+function copyToClipboard(uri: string) {
+  // 拼接得出url
+  let url = document.location.protocol + "//" + document.location.host + uri;
+
+  navigator.clipboard.writeText(url).then(() => {
+    message.success('Copied to clipboard',
+      {
+        duration: 2000
+      });
+  }, () => {
+    message.error('Failed to copy to clipboard',
+      {
+        duration: 2000
+      });
+  });
 }
 
 function create_new_window(uri: string) {

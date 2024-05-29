@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use axum::{
     body::Body,
-    extract::{Path, State},
-    http::HeaderMap,
+    extract::{Path, Request, State},
+    http::{StatusCode, Uri},
     response::{IntoResponse, Redirect, Response},
     routing::get,
     Json,
@@ -19,7 +19,7 @@ use crate::{
     DRIVE,
 };
 
-use super::{reverse_proxy, AppState};
+use super::AppState;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -66,7 +66,7 @@ async fn thumb(
 async fn proxy_thumb(
     State(state): State<Arc<AppState>>,
     Path((size, id)): Path<(Size, String)>,
-    headers: HeaderMap,
+    mut req: Request,
 ) -> impl IntoResponse {
     let thumb = match thumb_inner(state.clone(), &id).await {
         Ok(thumb) => thumb,
@@ -83,9 +83,17 @@ async fn proxy_thumb(
         return Response::builder().status(404).body(Body::empty()).unwrap();
     }
 
-    reverse_proxy(headers, url.to_string())
-        .await
-        .into_response()
+    let client = &state.client;
+
+    req.headers_mut().remove("host");
+    req.headers_mut().remove("referer");
+    *req.uri_mut() = Uri::try_from(url).unwrap();
+
+    let ret = client.request(req).await;
+    match ret {
+        Ok(response) => response.into_response(),
+        Err(_) => StatusCode::BAD_REQUEST.into_response(),
+    }
 }
 
 async fn thumb_inner(state: Arc<AppState>, id: &str) -> Result<Arc<Thumbnails>, Error> {

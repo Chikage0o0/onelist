@@ -15,7 +15,6 @@ pub fn parse_item(item: &DriveItem, caches: &Caches, home_path: &str) -> Result<
     let name = item.name.to_owned().unwrap_or_default();
     let size = item.size.unwrap_or_default();
     let last_modified_date_time = date_time_to_timestamp(item.last_modified_date_time.to_owned());
-    let created_date_time = date_time_to_timestamp(item.created_date_time.to_owned());
     let download_url = item.download_url.to_owned().unwrap_or_default();
 
     let path = item
@@ -66,7 +65,6 @@ pub fn parse_item(item: &DriveItem, caches: &Caches, home_path: &str) -> Result<
         name,
         size,
         last_modified_date_time,
-        created_date_time,
         full_path,
         file_type,
     };

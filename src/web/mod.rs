@@ -6,11 +6,13 @@ use std::{
 
 use axum::{
     body::Body,
-    http::{header, HeaderMap, StatusCode, Uri},
+    http::{header, StatusCode, Uri},
     response::{Html, IntoResponse, Response},
     routing::get,
     Router,
 };
+use hyper_tls::HttpsConnector;
+use hyper_util::{client::legacy::connect::HttpConnector, rt::TokioExecutor};
 use mini_moka::sync::Cache;
 use rust_embed::RustEmbed;
 use tokio::signal;
@@ -23,6 +25,8 @@ mod download;
 mod item;
 mod list;
 mod thumb;
+
+type Client = hyper_util::client::legacy::Client<HttpsConnector<HttpConnector>, Body>;
 
 pub async fn web_server(config: Setting) {
     let app = router(config.clone());
@@ -45,6 +49,7 @@ pub async fn web_server(config: Setting) {
 struct AppState {
     home_dir: String,
     cache: Caches,
+    client: Client,
 }
 
 const CACHE_DURATION: Duration = Duration::from_secs(60 * 10);
@@ -55,6 +60,9 @@ fn router(config: Setting) -> Router {
     } else {
         format!("/{}", config.setting.home_dir)
     };
+
+    let client = hyper_util::client::legacy::Client::<(), ()>::builder(TokioExecutor::new())
+        .build(HttpsConnector::new());
 
     let download_url_cache = Cache::builder().time_to_live(CACHE_DURATION).build();
     let list_cache = Cache::builder().time_to_live(CACHE_DURATION).build();
@@ -68,6 +76,7 @@ fn router(config: Setting) -> Router {
             thumb_cache,
             file_cache,
         },
+        client,
     });
 
     let router = Router::new()
@@ -154,38 +163,4 @@ async fn index_html() -> Response {
 
 async fn not_found() -> Response {
     (StatusCode::NOT_FOUND, "404").into_response()
-}
-
-async fn reverse_proxy(mut header: HeaderMap, url: String) -> impl IntoResponse {
-    let client = reqwest::Client::new();
-
-    header.remove("host");
-    header.remove("referer");
-
-    let response = client.get(&url).headers(header).send().await;
-    match response {
-        Ok(response) => {
-            let status = response.status();
-            let headers = response.headers().clone();
-            let body = response.bytes_stream();
-            let response = Response::builder().status(status);
-            let response = headers.iter().fold(response, |response, (key, value)| {
-                response.header(key, value)
-            });
-            let response = response.body(Body::from_stream(body));
-            response.unwrap_or(
-                Response::builder()
-                    .status(StatusCode::INTERNAL_SERVER_ERROR)
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-        }
-        Err(e) => {
-            let body = format!("Failed to proxy the download: {}", e);
-            Response::builder()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(Body::from(body))
-                .unwrap()
-        }
-    }
 }

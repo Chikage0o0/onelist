@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::{Path, State},
-    http::HeaderMap,
+    extract::{Path, Request, State},
+    http::{StatusCode, Uri},
     response::{IntoResponse, Redirect},
     routing::get,
     Json,
@@ -15,7 +15,7 @@ use snafu::Snafu;
 
 use crate::DRIVE;
 
-use super::{reverse_proxy, AppState};
+use super::AppState;
 
 async fn download_file(
     State(state): State<Arc<AppState>>,
@@ -52,7 +52,7 @@ async fn download_file(
 async fn proxy_download_file(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
-    headers: HeaderMap,
+    mut req: Request,
 ) -> impl IntoResponse {
     let drive = match DRIVE.get() {
         Some(drive) => drive,
@@ -79,9 +79,17 @@ async fn proxy_download_file(
         }
     };
 
-    reverse_proxy(headers, url.to_string())
-        .await
-        .into_response()
+    let client = &state.client;
+
+    req.headers_mut().remove("host");
+    req.headers_mut().remove("referer");
+    *req.uri_mut() = Uri::try_from(url).unwrap();
+
+    let ret = client.request(req).await;
+    match ret {
+        Ok(response) => response.into_response(),
+        Err(_) => StatusCode::BAD_REQUEST.into_response(),
+    }
 }
 
 #[derive(Debug, Snafu)]

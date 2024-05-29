@@ -31,7 +31,6 @@ pub struct FileInfo {
     name: String,
     size: i64,
     last_modified_date_time: i64,
-    created_date_time: i64,
     full_path: String,
     #[serde(rename = "type")]
     file_type: FileTypes,

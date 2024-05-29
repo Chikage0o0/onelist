@@ -3,18 +3,18 @@
 </template>
 
 <script lang="ts" setup>
-import { NIcon, useLoadingBar } from 'naive-ui';
-import { type RendererElement, type RendererNode, type VNode, h, onMounted, onUnmounted, ref, reactive, onBeforeMount } from 'vue';
-import { CloudDownloadSharp, FolderOpenOutline } from '@vicons/ionicons5';
+import { NFlex, NIcon, useLoadingBar, useMessage } from 'naive-ui';
+import { h, onMounted, onUnmounted, ref, reactive, onBeforeMount } from 'vue';
+import { CloudDownloadSharp, CopyOutline, FolderOpenOutline, VideocamOutline } from '@vicons/ionicons5';
 
 import { useRouter } from 'vue-router';
 const router = useRouter();
 const loadingBar = useLoadingBar()
+const message = useMessage()
 const columns = ref([
     {
         title: 'Name',
         key: 'name',
-        width: 300,
         ellipsis: {
             tooltip: true
         },
@@ -23,30 +23,53 @@ const columns = ref([
     {
         title: 'Size',
         key: 'size',
-        width: 150,
+        width: 120,
         sorter: 'default',
         render: (row: any) => {
             return bytesToSize(row.size)
         }
     },
     {
-        title: 'Creation Date',
-        key: 'creationDate',
-        sorter: 'default',
-        render: (row: any) => {
-            return timestampToDateTime(row.lastModified)
-        }
-    },
-    {
         title: 'Last Modified',
         key: 'lastModified',
+        width: 200,
         sorter: 'default',
         render: (row: any) => {
             return timestampToDateTime(row.lastModified)
+        },
+        disabled: true
+    },
+    {
+        title: 'Action',
+        key: 'action',
+        width: 80,
+        render: (row: any) => {
+            if (row.type === 'Folder') {
+                return h(NFlex, { justifyContent: 'center' }, {
+                    default: () => [
+                        h(NIcon, { onClick: () => { router.push(`/list${row.path}`) } }, { default: () => h(FolderOpenOutline) })
+                    ]
+                })
+            }
+            else if (row.type === 'Video') {
+                return h(NFlex, { justifyContent: 'center' }, {
+                    default: () => [h(NIcon, { onClick: () => { router.push(`/video${row.path}`) } }, { default: () => h(VideocamOutline) })]
+                })
+
+            }
+            else {
+                return h(NFlex, { justifyContent: 'center' }, {
+                    default: () => [
+                        h(NIcon, { onClick: () => { triggerDownload(`/api/download/${row.id}`, row.name) } }, { default: () => h(CloudDownloadSharp) }),
+                        // 复制链接到剪贴板
+                        h(NIcon, { onClick: () => { copyToClipboard(`/api/download/${row.id}`) } }, { default: () => h(CopyOutline) }),
+                    ]
+                })
+
+            }
         }
     }
 ]);
-
 
 
 const rowProps = (row: any) => {
@@ -58,17 +81,17 @@ const rowProps = (row: any) => {
             userSelect: 'none',
             webkitUserSelect: 'none',
         },
-        onclick: () => {
-            if (row.type === 'Folder') {
+        // onclick: () => {
+        //     if (row.type === 'Folder') {
 
-                router.push(`/list${row.path}`)
+        //         router.push(`/list${row.path}`)
 
-            } else if (row.type === 'Video') {
-                router.push(`/video${row.path}`)
-            } else {
-                triggerDownload(`/api/download/${row.id}`, row.name)
-            }
-        }
+        //     } else if (row.type === 'Video') {
+        //         router.push(`/video${row.path}`)
+        //     } else {
+        //         triggerDownload(`/api/download/${row.id}`, row.name)
+        //     }
+        // }
     }
 }
 
@@ -130,12 +153,12 @@ const refreshData = async () => {
         const res = await fetch(url)
         const json = await res.json()
         const files = json.files
+
         data.value = []
-        files.forEach((file: { type: string; name: any; id: any; size: number; created_date_time: number; last_modified_date_time: number; full_path: string }) => {
+        files.forEach((file: { type: string; name: any; id: any; size: number; last_modified_date_time: number; full_path: string }) => {
             data.value.push({
                 name: file.name,
                 size: file.size ? file.size : 0,
-                creationDate: file.created_date_time ? file.created_date_time : 0,
                 lastModified: file.last_modified_date_time ? file.last_modified_date_time : 0,
                 type: file.type,
                 id: file.id,
@@ -156,6 +179,28 @@ function triggerDownload(url: string, fileName: string) {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+    message.success('Download started' + fileName,
+        {
+            duration: 2000
+        });
+
+}
+
+function copyToClipboard(uri: string) {
+    // 拼接得出url
+    let url = document.location.protocol + "//" + document.location.host + uri;
+
+    navigator.clipboard.writeText(url).then(() => {
+        message.success('Copied to clipboard',
+            {
+                duration: 2000
+            });
+    }, () => {
+        message.error('Failed to copy to clipboard',
+            {
+                duration: 2000
+            });
+    });
 }
 
 
@@ -166,22 +211,9 @@ const unrefresh = router.afterEach(async () => {
     }
 })
 
-onBeforeMount(async () => {
-    // 如果是手机，只显示文件名
-    if (window.innerWidth < 768) {
-        columns.value = [
-            {
-                title: 'Name',
-                key: 'name',
-                width: window.innerWidth - 150,
-                ellipsis: {
-                    tooltip: true
-                },
-                sorter: 'default'
-            }
-        ]
-    }
-})
+
+
+
 
 onMounted(async () => {
     let path = window.location.pathname
@@ -193,9 +225,15 @@ onMounted(async () => {
     if (pageSize) {
         paginationReactive.pageSize = parseInt(pageSize)
     }
+
+    if (window.innerWidth < 768) {
+        columns.value = columns.value.filter((column: { key: string; }) => column.key !== 'size' && column.key !== 'lastModified')
+    }
 })
 
 onBeforeMount(async () => {
+
+
     // get now uri path
     await refreshData()
 })
