@@ -60,16 +60,25 @@ onMounted(async () => {
     }
   }
 
-});
-
-onUnmounted(() => {
-  // save the video progress to local storage
-  if (dp.value) {
-    if (videoUrl.value) {
+  // 添加监听事件
+  dp.value.on('timeupdate', () => {
+    if (videoUrl.value.video.currentTime != 0) {
       localStorage.setItem('video:' + videoUrl.value, dp.value.video.currentTime.toString());
     }
-  }
+  });
 
+  dp.value.on('ended', () => {
+    localStorage.removeItem('video:' + videoUrl.value);
+  });
+
+});
+
+
+
+onUnmounted(() => {
+  if (dp.value) {
+    dp.value.destroy();
+  }
 });
 
 function triggerDownload(url: string, fileName: string) {
