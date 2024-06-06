@@ -47,13 +47,13 @@ const columns = ref([
             if (row.type === 'Folder') {
                 return h(NFlex, { justifyContent: 'center' }, {
                     default: () => [
-                        h(NIcon, { onClick: () => { router.push(`/list${row.path}`) } }, { default: () => h(FolderOpenOutline) })
+                        h(NIcon, { onClick: () => { router.push(`/list${encodeURI(row.path)}`) } }, { default: () => h(FolderOpenOutline) })
                     ]
                 })
             }
             else if (row.type === 'Video') {
                 return h(NFlex, { justifyContent: 'center' }, {
-                    default: () => [h(NIcon, { onClick: () => { router.push(`/video${row.path}`) } }, { default: () => h(VideocamOutline) })]
+                    default: () => [h(NIcon, { onClick: () => { router.push(`/video${encodeURI(row.path)}`) } }, { default: () => h(VideocamOutline) })]
                 })
 
             }
