@@ -26,6 +26,7 @@ import { useRoute } from 'vue-router';
 
 const { p } = useRoute().params;
 const path = (p as string[]).join('/');
+const pathEncode = encodeURI(path);
 const videoUrl = ref("");
 const thumbUrl = ref("");
 
@@ -37,9 +38,8 @@ const dp = ref<DPlayer>();
 
 
 onMounted(async () => {
-  console.log(p);
   try {
-    const response = await fetch(`/api/info/${path}`);
+    const response = await fetch(`/api/info/${pathEncode}`);
     const data = await response.json();
     name.value = data.file.name;
     videoUrl.value = `/api/download/${data.file.id}`;
