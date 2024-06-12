@@ -11,7 +11,7 @@ use axum::{
     routing::get,
     Router,
 };
-use hyper_tls::HttpsConnector;
+use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
 use hyper_util::{client::legacy::connect::HttpConnector, rt::TokioExecutor};
 use mini_moka::sync::Cache;
 use rust_embed::RustEmbed;
@@ -61,8 +61,14 @@ fn router(config: Setting) -> Router {
         format!("/{}", config.setting.home_dir)
     };
 
-    let client = hyper_util::client::legacy::Client::<(), ()>::builder(TokioExecutor::new())
-        .build(HttpsConnector::new());
+    let client = hyper_util::client::legacy::Client::<(), ()>::builder(TokioExecutor::new()).build(
+        HttpsConnectorBuilder::new()
+            .with_native_roots()
+            .expect("no native root CA certificates found")
+            .https_or_http()
+            .enable_all_versions()
+            .build(),
+    );
 
     let download_url_cache = Cache::builder().time_to_live(CACHE_DURATION).build();
     let list_cache = Cache::builder().time_to_live(CACHE_DURATION).build();

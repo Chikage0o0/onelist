@@ -5,26 +5,28 @@ edition = "2021"
 
 [dependencies]
 arc-swap = "1.7.1"
-axum = { version = "0.7.5" }
+axum = { version = "0.7.5", features = ["http2"] }
 chrono = "0.4.38"
 config = "0.14.0"
 
 futures-util = "0.3.30"
 mime_guess = "2.0.4"
 mini-moka = "0.10.3"
-onedrive-api = "0.10.0"
+onedrive-api = { git = "https://github.com/Chikage0o0/onedrive-api-rustls", default-features = false, features = [
+    "rustls",
+] }
 
-rust-embed = "8.3.0"
-serde = { version = "1.0.201", features = ["derive"] }
+rust-embed = "8.4.0"
+serde = { version = "1.0.203", features = ["derive"] }
 serde_json = "1.0.117"
 snafu = "0.8.2"
-tokio = { version = "1.37.0", features = [
+tokio = { version = "1.38.0", features = [
     "macros",
     "rt-multi-thread",
     "signal",
     "fs",
 ] }
-toml = "0.8.12"
+toml = "0.8.14"
 tower-http = { version = "0.5.2", features = [
     "trace",
     "compression-full",
@@ -32,13 +34,10 @@ tower-http = { version = "0.5.2", features = [
 ] }
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
-url = "2.5.0"
+url = "2.5.1"
 
 hyper-util = "0.1.5"
-hyper-tls = "0.6.0"
-
-[target.'cfg(target_os = "linux")'.dependencies]
-openssl-sys = { version = "0.9.102", features = ["vendored"] }
+hyper-rustls = { version = "0.27.2", features = ["http2"] }
 
 
 [profile.release]
