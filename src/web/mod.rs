@@ -96,7 +96,7 @@ fn router(config: Setting) -> Router {
         .fallback_service(get(static_handler))
         .layer(TraceLayer::new_for_http())
         .layer(CompressionLayer::new())
-        .layer(TimeoutLayer::new(Duration::from_secs(10)))
+        .layer(TimeoutLayer::new(Duration::from_secs(20)))
 }
 
 async fn shutdown_signal() {
