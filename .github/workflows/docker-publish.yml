@@ -1,0 +1,61 @@
+name: Docker
+
+on:
+  push:
+    branches:
+      - master # 推送到master分支时触发
+    tags:
+      - "v*.*.*" # 推送符合版本号格式的标签时触发
+  pull_request:
+    branches:
+      - master # 对master分支的PR时触发
+
+env:
+  REGISTRY: ghcr.io # 默认使用GitHub Container Registry
+  IMAGE_NAME: ${{ github.repository }} # 镜像名称为GitHub仓库名称
+
+jobs:
+  build:
+    runs-on: ubuntu-latest # 使用最新的Ubuntu作为运行环境
+    permissions:
+      contents: read # 读取仓库内容的权限
+      packages: write # 写入包的权限
+      id-token: write # 用于sigstore/fulcio的身份验证权限
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4 # 检出代码
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3 # 设置QEMU以支持多架构构建
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3 # 设置Buildx用于多平台构建和缓存
+
+      - name: Log into registry ${{ env.REGISTRY }}
+        if: github.event_name != 'pull_request' # 如果不是PR事件，则登录到Docker registry
+        uses: docker/login-action@v3 # v3.0.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5 # v5.0.0 # 提取Docker元数据（标签，标签等）
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ github.ref_name }} # 使用当前的ref名称作为标签
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }} # 如果是标签触发，添加latest标签
+
+      - name: Build and push Docker image
+        id: build-and-push
+        uses: docker/build-push-action@v5 # v5.0.0 # 使用Buildx构建并推送Docker镜像
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64 # 构建多平台镜像
+          push: ${{ github.event_name != 'pull_request' }} # 不是PR时推送
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
