@@ -15,20 +15,33 @@ jobs:
         platform:
           - release_for: Linux-x86_64
             target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
             bin: onelist
             name: onelist-Linux-x86_64
+            cmd: cross
 
           - release_for: Linux-arm64
             target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
             bin: onelist
             name: onelist-Linux-arm64
+            cmd: cross
 
           - release_for: Windows-x86_64
-            target: x86_64-pc-windows-gnu
+            target: x86_64-pc-windows-msvc
+            os: windows-latest
             bin: onelist.exe
             name: onelist-Windows-x86_64.exe
+            cmd: cargo
 
-    runs-on: ubuntu-latest
+          - release_for: Windows-x86_64
+            target: aarch64-pc-windows-msvc
+            os: windows-latest
+            bin: onelist.exe
+            name: onelist-Windows-x86_64.exe
+            cmd: cargo
+
+    runs-on: ${{ matrix.platform.os }}
     env:
       CARGO_TERM_COLOR: always
 
@@ -62,7 +75,7 @@ jobs:
         run: yarn build
         working-directory: ui
 
-      - name: Cache Cross
+      - name: Cache Cross (Linux only)
         uses: actions/cache@v4
         with:
           path: ~/.cargo/bin/cross
@@ -73,11 +86,15 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install Cross if not cached
+      - name: Install Cross if not cached (Linux only)
         run: |
           if [ ! -f ~/.cargo/bin/cross ]; then
             cargo install cross
           fi
+
+      - name: Install nasm (Windows only)
+        if: matrix.platform.os == 'windows-latest'
+        run: choco install nasm
 
       - name: Cache Rust build
         uses: actions/cache@v4
@@ -91,7 +108,7 @@ jobs:
             ${{ runner.os }}-cargo-${{ matrix.platform.target }}-
 
       - name: Build binary
-        run: cross build --release --target ${{ matrix.platform.target }}
+        run: ${{ matrix.platform.cmd }} build --release --target ${{ matrix.platform.target }}
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
