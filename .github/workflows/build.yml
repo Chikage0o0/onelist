@@ -1,0 +1,61 @@
+name: Rust Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: amd64
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            arch: arm64
+            target: aarch64-unknown-linux-gnu
+          - os: windows-latest
+            arch: amd64
+            target: x86_64-pc-windows-msvc
+          - os: windows-latest
+            arch: arm64
+            target: aarch64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    env:
+      CARGO_TERM_COLOR: always
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Install target
+        run: |
+          rustup target add ${{ matrix.target }}
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Rename artifact
+        run: |
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            mv target/${{ matrix.target }}/release/onelist.exe target/${{ matrix.target }}/release/onelist-${{ matrix.target }}.exe
+          else
+            mv target/${{ matrix.target }}/release/onelist target/${{ matrix.target }}/release/onelist-${{ matrix.target }}
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: onelist-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/onelist-${{ matrix.target }}*
