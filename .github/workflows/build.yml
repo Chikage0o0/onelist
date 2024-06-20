@@ -18,28 +18,28 @@ jobs:
             target: x86_64-unknown-linux-musl
             bin: onelist
             name: onelist-Linux-x86_64
-            command: build
+            command: cross
 
           - release_for: Linux-arm64
             os: ubuntu-latest
             target: aarch64-unknown-linux-musl
             bin: onelist
             name: onelist-Linux-arm64
-            command: build
+            command: cross
 
           - release_for: Windows-x86_64
             os: windows-latest
-            target: x86_64-pc-windows-msvc
+            target: x86_64-pc-windows-gnu
             bin: onelist.exe
             name: onelist-Windows-x86_64.exe
-            command: build
+            command: cargo
 
           - release_for: Windows-arm64
             os: windows-latest
-            target: aarch64-pc-windows-msvc
+            target: aarch64-pc-windows-gnu
             bin: onelist.exe
             name: onelist-Windows-arm64.exe
-            command: build
+            command: cargo
 
     runs-on: ${{ matrix.platform.os }}
     env:
@@ -75,14 +75,11 @@ jobs:
         run: yarn build
         working-directory: ui
 
-      - name: Install required packages (Windows)
-        if: runner.os == 'Windows'
-        run: choco install nasm -y
-
       - name: Build binary
-        uses: houseabsolute/actions-rust-cross@v0
+        run: ${{ matrix.platform.command }} build --release --target ${{ matrix.platform.target }}
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
         with:
-          command: ${{ matrix.platform.command }}
-          target: ${{ matrix.platform.target }}
-          args: "--locked --release"
-          strip: true
+          name: ${{ matrix.platform.name }}
+          path: target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }}
