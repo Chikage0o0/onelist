@@ -77,14 +77,23 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.platform.target }}
 
       - name: Install Cross if not cached
         run: |
           if [ ! -f ~/.cargo/bin/cross ]; then
             cargo install cross
           fi
+
+      - name: Cache Rust build
+        uses: actions/cache@v4
+        with:
+          path: |
+            target
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ matrix.platform.target }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ matrix.platform.target }}-
 
       - name: Build binary
         run: cross build --release --target ${{ matrix.platform.target }}
