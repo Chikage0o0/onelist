@@ -34,11 +34,11 @@ jobs:
             name: onelist-Windows-x86_64.exe
             cmd: cargo
 
-          - release_for: Windows-x86_64
+          - release_for: Windows-arm64
             target: aarch64-pc-windows-msvc
             os: windows-latest
             bin: onelist.exe
-            name: onelist-Windows-x86_64.exe
+            name: onelist-Windows-arm64.exe
             cmd: cargo
 
     runs-on: ${{ matrix.platform.os }}
@@ -98,10 +98,7 @@ jobs:
 
       - name: Install nasm and ninja (Windows only)
         if: matrix.platform.os == 'windows-latest'
-        run: |
-          choco install nasm
-          choco install ninja
-          $env:Path += ";C:\Program Files\NASM;C:\Program Files\Ninja"
+        run: choco install nasm ninja
 
       - name: Cache Rust build
         uses: actions/cache@v4
