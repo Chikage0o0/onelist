@@ -84,11 +84,19 @@ jobs:
         with:
           toolchain: stable
 
-      - name: Install Cross if not cached
+      - name: Install Cross if not cached (Linux)
+        if: runner.os != 'Windows'
         run: |
           if [ ! -f ~/.cargo/bin/cross ]; then
             cargo install cross
           fi
+
+      - name: Install Cross if not cached (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          if (!(Test-Path "$env:USERPROFILE\.cargo\bin\cross.exe")) {
+            cargo install cross
+          }
 
       - name: Build binary
         run: cross build --release --target ${{ matrix.platform.target }}
