@@ -76,7 +76,7 @@ jobs:
             ${{ runner.os }}-cross-
 
       - name: Install Rust
-      - uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.platform.target }}
 
