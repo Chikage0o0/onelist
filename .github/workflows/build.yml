@@ -98,7 +98,10 @@ jobs:
 
       - name: Install nasm and ninja (Windows only)
         if: matrix.platform.os == 'windows-latest'
-        run: choco install nasm ninja
+        run: |
+          choco install nasm
+          choco install ninja
+          $env:Path += ";C:\Program Files\NASM;C:\Program Files\Ninja"
 
       - name: Cache Rust build
         uses: actions/cache@v4
