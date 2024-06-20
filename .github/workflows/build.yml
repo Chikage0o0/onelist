@@ -28,11 +28,6 @@ jobs:
             bin: onelist.exe
             name: onelist-Windows-x86_64.exe
 
-          - release_for: Windows-arm64
-            target: aarch64-pc-windows-gnu
-            bin: onelist.exe
-            name: onelist-Windows-arm64.exe
-
     runs-on: ubuntu-latest
     env:
       CARGO_TERM_COLOR: always
