@@ -41,7 +41,7 @@ jobs:
             name: onelist-Windows-arm64.zip
             command: build
 
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.platform.os }}
     env:
       CARGO_TERM_COLOR: always
 
