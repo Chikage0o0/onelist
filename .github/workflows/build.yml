@@ -96,9 +96,9 @@ jobs:
             cargo install cross
           fi
 
-      - name: Install nasm (Windows only)
+      - name: Install nasm and ninja (Windows only)
         if: matrix.platform.os == 'windows-latest'
-        run: choco install nasm
+        run: choco install nasm ninja
 
       - name: Cache Rust build
         uses: actions/cache@v4
