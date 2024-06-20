@@ -14,30 +14,26 @@ jobs:
       matrix:
         platform:
           - release_for: Linux-x86_64
-            os: ubuntu-latest
             target: x86_64-unknown-linux-musl
             bin: onelist
             name: onelist-Linux-x86_64
 
           - release_for: Linux-arm64
-            os: ubuntu-latest
             target: aarch64-unknown-linux-musl
             bin: onelist
             name: onelist-Linux-arm64
 
           - release_for: Windows-x86_64
-            os: windows-latest
             target: x86_64-pc-windows-gnu
             bin: onelist.exe
             name: onelist-Windows-x86_64.exe
 
           - release_for: Windows-arm64
-            os: windows-latest
             target: aarch64-pc-windows-gnu
             bin: onelist.exe
             name: onelist-Windows-arm64.exe
 
-    runs-on: ${{ matrix.platform.os }}
+    runs-on: ubuntu-latest
     env:
       CARGO_TERM_COLOR: always
 
@@ -80,23 +76,15 @@ jobs:
             ${{ runner.os }}-cross-
 
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
+          targets: ${{ matrix.platform.target }}
 
-      - name: Install Cross if not cached (Linux)
-        if: runner.os != 'Windows'
+      - name: Install Cross if not cached
         run: |
           if [ ! -f ~/.cargo/bin/cross ]; then
             cargo install cross
           fi
-
-      - name: Install Cross if not cached (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          if (!(Test-Path "$env:USERPROFILE\.cargo\bin\cross.exe")) {
-            cargo install cross
-          }
 
       - name: Build binary
         run: cross build --release --target ${{ matrix.platform.target }}
