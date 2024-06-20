@@ -86,6 +86,8 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform.target }}
 
       - name: Install Cross if not cached (Linux only)
         if: matrix.platform.os == 'ubuntu-latest'
