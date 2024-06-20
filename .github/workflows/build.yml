@@ -76,15 +76,11 @@ jobs:
         with:
           toolchain: stable
 
-      - name: Install target
-        run: rustup target add ${{ matrix.platform.target }}
-
-      - name: Install musl-tools
-        if: startsWith(matrix.platform.target, 'x86_64-unknown-linux-musl') || startsWith(matrix.platform.target, 'aarch64-unknown-linux-musl')
-        run: sudo apt-get install -y musl-tools musl-dev
+      - name: Install Cross
+        run: cargo install cross
 
       - name: Build binary
-        run: cargo build --release --target ${{ matrix.platform.target }}
+        run: cross build --release --target ${{ matrix.platform.target }}
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
