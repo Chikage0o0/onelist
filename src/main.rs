@@ -40,6 +40,7 @@ async fn main() {
         &config.auth.client_id,
         &config.auth.client_secret,
         &config.auth.refresh_token,
+        (*config.auth.r#type).clone(),
     )
     .await;
     DRIVE.set(ArcSwap::from_pointee(onedrive)).unwrap();
@@ -83,6 +84,7 @@ mod tests {
             &config.auth.client_id,
             &config.auth.client_secret,
             &config.auth.refresh_token,
+            (*config.auth.r#type).clone(),
         )
         .await;
         DRIVE.set(ArcSwap::from_pointee(onedrive)).unwrap();

@@ -1,6 +1,7 @@
-use std::path::Path;
+use std::{ops::Deref, path::Path};
 
 use config::Config;
+use onedrive_api::Tenant;
 use serde::{Deserialize, Serialize};
 use snafu::ResultExt;
 use tracing::{info, warn};
@@ -20,7 +21,48 @@ pub struct Auth {
     pub client_id: String,
     pub client_secret: String,
     pub refresh_token: Option<String>,
+    pub r#type: ApiType,
 }
+
+#[derive(Debug, Clone)]
+pub struct ApiType(pub Tenant);
+impl Deref for ApiType {
+    type Target = Tenant;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Serialize for ApiType {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        match self.0 {
+            Tenant::Consumers => serializer.serialize_str("consumers"),
+            Tenant::Organizations => serializer.serialize_str("organizations"),
+            Tenant::Common => serializer.serialize_str("common"),
+            Tenant::Issuer(ref s) => serializer.serialize_str(s),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for ApiType {
+    fn deserialize<D>(deserializer: D) -> Result<ApiType, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        match s.as_str() {
+            "consumers" => Ok(ApiType(Tenant::Consumers)),
+            "organizations" => Ok(ApiType(Tenant::Organizations)),
+            "common" => Ok(ApiType(Tenant::Common)),
+            _ => Ok(ApiType(Tenant::Issuer(s))),
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct UserSetting {
     pub home_dir: String,
@@ -77,6 +119,7 @@ pub async fn handle_error(e: Error) {
                 client_id: "".to_string(),
                 client_secret: "".to_string(),
                 refresh_token: None,
+                r#type: ApiType(Tenant::Consumers),
             },
             setting: UserSetting {
                 home_dir: "/".to_string(),
@@ -102,6 +145,7 @@ mod tests {
                 client_id: "client_id".to_string(),
                 client_secret: "client_secret".to_string(),
                 refresh_token: None,
+                r#type: ApiType(Tenant::Consumers),
             },
             setting: UserSetting {
                 home_dir: "/".to_string(),

@@ -14,7 +14,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use onedrive_api::{Auth, ClientCredential, TokenResponse};
+use onedrive_api::{Auth, ClientCredential, Tenant, TokenResponse};
 use snafu::{ResultExt, Snafu};
 use tracing::{debug, info};
 use url::Url;
@@ -34,12 +34,17 @@ pub struct Token {
 }
 
 impl Onedrive {
-    pub async fn new(client_id: &str, client_secret: &str, refresh_token: &Option<String>) -> Self {
+    pub async fn new(
+        client_id: &str,
+        client_secret: &str,
+        refresh_token: &Option<String>,
+        api_type: Tenant,
+    ) -> Self {
         let auth = onedrive_api::Auth::new(
             client_id,
             onedrive_api::Permission::new_read().offline_access(true),
             "http://localhost:10080/redirect",
-            onedrive_api::Tenant::Organizations,
+            api_type,
         );
 
         // refresh or login
