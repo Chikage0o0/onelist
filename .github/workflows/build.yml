@@ -31,14 +31,14 @@ jobs:
             target: x86_64-pc-windows-msvc
             os: windows-latest
             bin: onelist.exe
-            name: onelist-Windows-x86_64.exe
+            name: onelist-Windows-x86_64
             cmd: cargo
 
           - release_for: Windows-arm64
             target: aarch64-pc-windows-msvc
             os: windows-latest
             bin: onelist.exe
-            name: onelist-Windows-arm64.exe
+            name: onelist-Windows-arm64
             cmd: cargo
 
     runs-on: ${{ matrix.platform.os }}
