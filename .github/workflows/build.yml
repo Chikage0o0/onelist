@@ -82,8 +82,13 @@ jobs:
         run: |
           rustup target add ${{ matrix.target }}
 
-      - name: Build
-        run: cargo build --release --target ${{ matrix.target }}
+      - name: Build Rust project
+        run: |
+          if [ "${{ matrix.arch }}" == "arm64" ]; then
+            CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ cargo build --release --target ${{ matrix.target }}
+          else
+            cargo build --release --target ${{ matrix.target }}
+          fi
 
       - name: Rename artifact
         run: |
