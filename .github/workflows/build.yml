@@ -18,28 +18,24 @@ jobs:
             target: x86_64-unknown-linux-musl
             bin: onelist
             name: onelist-Linux-x86_64
-            command: cross
 
           - release_for: Linux-arm64
             os: ubuntu-latest
             target: aarch64-unknown-linux-musl
             bin: onelist
             name: onelist-Linux-arm64
-            command: cross
 
           - release_for: Windows-x86_64
             os: windows-latest
             target: x86_64-pc-windows-gnu
             bin: onelist.exe
             name: onelist-Windows-x86_64.exe
-            command: cargo
 
           - release_for: Windows-arm64
             os: windows-latest
             target: aarch64-pc-windows-gnu
             bin: onelist.exe
             name: onelist-Windows-arm64.exe
-            command: cargo
 
     runs-on: ${{ matrix.platform.os }}
     env:
@@ -75,8 +71,20 @@ jobs:
         run: yarn build
         working-directory: ui
 
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Install target
+        run: rustup target add ${{ matrix.platform.target }}
+
+      - name: Install musl-tools
+        if: startsWith(matrix.platform.target, 'x86_64-unknown-linux-musl') || startsWith(matrix.platform.target, 'aarch64-unknown-linux-musl')
+        run: sudo apt-get install -y musl-tools musl-dev
+
       - name: Build binary
-        run: ${{ matrix.platform.command }} build --release --target ${{ matrix.platform.target }}
+        run: cargo build --release --target ${{ matrix.platform.target }}
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
