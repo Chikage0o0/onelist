@@ -12,19 +12,35 @@ jobs:
   build:
     strategy:
       matrix:
-        include:
-          - os: ubuntu-latest
-            arch: amd64
+        platform:
+          - release_for: Linux-x86_64
+            os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-          - os: ubuntu-latest
-            arch: arm64
+            bin: onelist
+            name: onelist-Linux-x86_64.tar.gz
+            command: build
+
+          - release_for: Linux-arm64
+            os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
-          - os: windows-latest
-            arch: amd64
+            bin: onelist
+            name: onelist-Linux-arm64.tar.gz
+            command: build
+
+          - release_for: Windows-x86_64
+            os: windows-latest
             target: x86_64-pc-windows-msvc
-          - os: windows-latest
-            arch: arm64
+            bin: onelist.exe
+            name: onelist-Windows-x86_64.zip
+            command: build
+
+          - release_for: Windows-arm64
+            os: windows-latest
             target: aarch64-pc-windows-msvc
+            bin: onelist.exe
+            name: onelist-Windows-arm64.zip
+            command: build
+
     runs-on: ${{ matrix.os }}
     env:
       CARGO_TERM_COLOR: always
@@ -59,47 +75,10 @@ jobs:
         run: yarn build
         working-directory: ui
 
-      - name: install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install required packages (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          if [ "${{ matrix.arch }}" == "arm64" ]; then
-            sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
-          fi
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
+      - name: Build binary
+        uses: houseabsolute/actions-rust-cross@v0
         with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-registry-
-
-      - name: Install target
-        run: |
-          rustup target add ${{ matrix.target }}
-
-      - name: Build Rust project
-        run: |
-          if [ "${{ matrix.arch }}" == "arm64" ]; then
-            CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ cargo build --release --target ${{ matrix.target }}
-          else
-            cargo build --release --target ${{ matrix.target }}
-          fi
-
-      - name: Rename artifact
-        run: |
-          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            mv target/${{ matrix.target }}/release/onelist.exe target/${{ matrix.target }}/release/onelist-${{ matrix.target }}.exe
-          else
-            mv target/${{ matrix.target }}/release/onelist target/${{ matrix.target }}/release/onelist-${{ matrix.target }}
-          fi
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: onelist-${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/onelist-${{ matrix.target }}*
+          command: ${{ matrix.platform.command }}
+          target: ${{ matrix.platform.target }}
+          args: "--locked --release"
+          strip: true
