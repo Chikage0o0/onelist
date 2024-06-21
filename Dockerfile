@@ -12,7 +12,7 @@ WORKDIR /build
 # 复制源码
 COPY . .
 
-RUN cd ui && yarn && yarn build && cd ..
+RUN yarn config set registry https://registry.npmjs.org && cd ui && yarn && yarn build && cd ..
 
 RUN source $HOME/.cargo/env && cargo build --release
 

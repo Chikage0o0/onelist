@@ -68,7 +68,7 @@ jobs:
         run: npm install -g yarn
 
       - name: Install UI dependencies
-        run: yarn install
+        run: yarn config set registry https://registry.npmjs.org && yarn install
         working-directory: ui
 
       - name: Build UI
