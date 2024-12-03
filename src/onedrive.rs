@@ -60,8 +60,6 @@ impl Onedrive {
             panic!("Failed to login or refresh: {:?}", e);
         });
 
-        // save the config
-
         let drive =
             onedrive_api::OneDrive::new(&token.access_token, onedrive_api::DriveLocation::me());
 

@@ -38,7 +38,7 @@ async fn main() {
 
     let onedrive = Onedrive::new(&config).await;
     DRIVE.set(ArcSwap::from_pointee(onedrive)).unwrap();
-
+    let _ = config.save().await;
     worker::worker();
 
     web_server(config.clone()).await;
