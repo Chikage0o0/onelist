@@ -14,10 +14,16 @@ use std::{
     time::{Duration, Instant},
 };
 
-use onedrive_api::{Auth, ClientCredential, Tenant, TokenResponse};
+use onedrive_api::{Auth, ClientCredential, TokenResponse};
 use snafu::{ResultExt, Snafu};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::{TcpListener, TcpStream},
+};
 use tracing::{debug, info};
 use url::Url;
+
+use crate::utils::config::Setting;
 
 #[derive(Debug)]
 pub struct Onedrive {
@@ -34,37 +40,34 @@ pub struct Token {
 }
 
 impl Onedrive {
-    pub async fn new(
-        client_id: &str,
-        client_secret: &str,
-        refresh_token: &Option<String>,
-        api_type: Tenant,
-    ) -> Self {
+    pub async fn new(config: &Setting) -> Self {
         let auth = onedrive_api::Auth::new(
-            client_id,
+            config.auth.client_id.clone(),
             onedrive_api::Permission::new_read().offline_access(true),
-            "http://localhost:10080/redirect",
-            api_type,
+            "http://localhost:8077/redirect",
+            config.auth.r#type.0.clone(),
         );
 
         // refresh or login
-        let token = if let Some(refresh_token) = refresh_token {
+        let token = if let Some(refresh_token) = &config.auth.refresh_token {
             info!("refresh_token is found, refresh");
-            Self::login_with_refresh_token(&auth, client_secret, refresh_token).await
+            Self::login_with_refresh_token(&auth, &config.auth.client_secret, refresh_token).await
         } else {
             info!("refresh_token is not found, login");
-            Self::login(&auth, client_secret).await
+            Self::login(&auth, &config.auth.client_secret).await
         }
         .unwrap_or_else(|e| {
             panic!("Failed to login or refresh: {:?}", e);
         });
+
+        // save the config
 
         let drive =
             onedrive_api::OneDrive::new(&token.access_token, onedrive_api::DriveLocation::me());
 
         Self {
             auth,
-            client_secret: client_secret.to_string(),
+            client_secret: config.auth.client_secret.to_string(),
             token,
             drive,
         }
@@ -74,18 +77,21 @@ impl Onedrive {
         let url = auth.code_auth_url();
         println!("Open the following URL in your browser:\n{}", url);
 
-        println!("Please enter the redirect URL:");
-        let input = tokio::task::spawn_blocking(move || {
-            let mut input = String::new();
-            io::stdin()
-                .read_line(&mut input)
-                .context(GetRedirectUrlSnafu)?;
-            Ok(input)
-        });
+        // temporary webserver to get the code
+        let listener = TcpListener::bind("0.0.0.0:8077")
+            .await
+            .context(BindFailedSnafu)?;
 
-        let input = input.await.unwrap()?;
+        let code: String;
+        if let Ok((stream, _)) = listener.accept().await {
+            code = handle_connection(stream).await.context(BindFailedSnafu)?;
+        } else {
+            return Err(Error::GetRedirectUrl {
+                source: io::Error::new(io::ErrorKind::Other, "Failed to get the redirect url"),
+            });
+        }
 
-        let code = parse_code(&input).ok_or(ParseCodeSnafu { s: input }.build())?;
+        let code = parse_code(&code).ok_or(ParseCodeSnafu { s: code }.build())?;
         let client_secret = ClientCredential::Secret(client_secret.to_string());
         // Get the token from the code
         let token = auth
@@ -148,7 +154,7 @@ impl From<TokenResponse> for Token {
 }
 
 fn parse_code(url: &str) -> Option<String> {
-    let url = Url::parse(url);
+    let url = Url::parse(format!("http://localhost:8077{}", url).as_str());
     let url = match url {
         Ok(url) => url,
         Err(_) => return None,
@@ -176,4 +182,35 @@ pub enum Error {
 
     #[snafu(display("Failed to login {}", source))]
     GetRedirectUrl { source: io::Error },
+
+    #[snafu(display("Failed to bind the 10080 port {}", source))]
+    BindFailed { source: io::Error },
+}
+
+async fn handle_connection(mut stream: TcpStream) -> Result<String, std::io::Error> {
+    // 创建缓冲区
+    let mut buffer = [0; 1024];
+
+    // 异步读取数据
+    match stream.read(&mut buffer).await {
+        Ok(n) => {
+            let request = String::from_utf8_lossy(&buffer[..n]);
+
+            // 解析请求的第一行来获取 URI
+            let request_line = request.lines().next().unwrap_or("");
+            let uri = request_line.split_whitespace().nth(1).unwrap_or("/");
+
+            // 构建响应
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nYou requested: {}",
+                uri
+            );
+
+            // 异步发送响应
+            stream.write_all(response.as_bytes()).await?;
+            stream.flush().await?;
+            return Ok(uri.to_string());
+        }
+        Err(e) => return Err(e),
+    }
 }

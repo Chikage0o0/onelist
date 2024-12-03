@@ -36,13 +36,7 @@ async fn main() {
     info!("Configuration loaded: {:?}", config);
     NAME.set(config.setting.name.clone()).unwrap();
 
-    let onedrive = Onedrive::new(
-        &config.auth.client_id,
-        &config.auth.client_secret,
-        &config.auth.refresh_token,
-        (*config.auth.r#type).clone(),
-    )
-    .await;
+    let onedrive = Onedrive::new(&config).await;
     DRIVE.set(ArcSwap::from_pointee(onedrive)).unwrap();
 
     worker::worker();
@@ -80,13 +74,7 @@ mod tests {
         info!("Configuration loaded: {:?}", config);
         NAME.set(config.setting.name.clone()).unwrap();
 
-        let onedrive = Onedrive::new(
-            &config.auth.client_id,
-            &config.auth.client_secret,
-            &config.auth.refresh_token,
-            (*config.auth.r#type).clone(),
-        )
-        .await;
+        let onedrive = Onedrive::new(&config).await;
         DRIVE.set(ArcSwap::from_pointee(onedrive)).unwrap();
 
         worker::worker();

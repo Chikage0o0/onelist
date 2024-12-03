@@ -8,4 +8,5 @@ pub enum Error {
 
     #[snafu(display("Failed to write config: {}", source))]
     WriteConfigFailed { source: std::io::Error },
+
 }

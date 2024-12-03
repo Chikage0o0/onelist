@@ -63,8 +63,7 @@ fn router(config: Setting) -> Router {
 
     let client = hyper_util::client::legacy::Client::<(), ()>::builder(TokioExecutor::new()).build(
         HttpsConnectorBuilder::new()
-            .with_native_roots()
-            .expect("no native root CA certificates found")
+            .with_webpki_roots()
             .https_or_http()
             .enable_all_versions()
             .build(),
