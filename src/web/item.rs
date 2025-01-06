@@ -96,7 +96,7 @@ impl IntoResponse for Error {
 
 pub fn router(state: Arc<AppState>) -> axum::Router {
     let route = axum::Router::new()
-        .route("/*path", get(get_item))
+        .route("/{*path}", get(get_item))
         .with_state(state);
 
     axum::Router::new().nest("/info", route)

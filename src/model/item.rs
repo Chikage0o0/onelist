@@ -38,7 +38,7 @@ pub fn parse_item(item: &DriveItem, caches: &Caches, home_path: &str) -> Result<
         .and_then(|file| file.get("mimeType"))
         .and_then(|mime| mime.as_str())
         .unwrap_or_default();
-    let file_type = if mime.starts_with("video") {
+    let file_type = if mime.starts_with("video") || name.ends_with(".mkv") {
         FileTypes::Video
     } else if mime.starts_with("audio") {
         FileTypes::Audio

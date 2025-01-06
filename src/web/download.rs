@@ -115,9 +115,9 @@ impl IntoResponse for Error {
 pub fn router(state: Arc<AppState>, use_proxy: bool) -> axum::Router {
     let route = axum::Router::new();
     let route = if use_proxy {
-        route.route("/:id", get(proxy_download_file))
+        route.route("/{id}", get(proxy_download_file))
     } else {
-        route.route("/:id", get(download_file))
+        route.route("/{id}", get(download_file))
     }
     .with_state(state);
 

@@ -32,9 +32,9 @@ pub enum Size {
 pub fn router(state: Arc<AppState>, use_proxy: bool) -> axum::Router {
     let route = axum::Router::new();
     let route = if use_proxy {
-        route.route("/:size/:id", get(proxy_thumb))
+        route.route("/{size}/{id}", get(proxy_thumb))
     } else {
-        route.route("/:size/:id", get(thumb))
+        route.route("/{size}/{id}", get(thumb))
     }
     .with_state(state);
 

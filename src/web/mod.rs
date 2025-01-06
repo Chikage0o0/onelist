@@ -16,7 +16,7 @@ use hyper_util::{client::legacy::connect::HttpConnector, rt::TokioExecutor};
 use mini_moka::sync::Cache;
 use rust_embed::RustEmbed;
 use tokio::signal;
-use tower_http::{compression::CompressionLayer, timeout::TimeoutLayer, trace::TraceLayer};
+use tower_http::{timeout::TimeoutLayer, trace::TraceLayer};
 use tracing::info;
 
 use crate::{model::Caches, utils::config::Setting, NAME};
@@ -94,7 +94,6 @@ fn router(config: Setting) -> Router {
         .nest("/api", router)
         .fallback_service(get(static_handler))
         .layer(TraceLayer::new_for_http())
-        .layer(CompressionLayer::new())
         .layer(TimeoutLayer::new(Duration::from_secs(20)))
 }
 
